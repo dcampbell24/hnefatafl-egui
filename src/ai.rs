@@ -7,12 +7,12 @@ use hnefatafl::game::GameOutcome::{Draw, Win};
 use hnefatafl::game::GameStatus::{Ongoing, Over};
 use hnefatafl::pieces::PieceType::{King, Soldier};
 use hnefatafl::pieces::Side::{Attacker, Defender};
-use hnefatafl::pieces::{Piece, Side, KING};
+use hnefatafl::pieces::{Piece, Side};
 use hnefatafl::play::Play;
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng, RngCore};
 use std::cmp::{max, min};
-use std::process::exit;
+use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -38,7 +38,7 @@ impl ZobristTable {
     fn new(board_len: usize, rng: &mut impl Rng) -> Self {
         let n_tiles = board_len.pow(2);
         let mut hashes: Vec<[u64; 3]> = Vec::with_capacity(n_tiles);
-        for bi in 0..n_tiles {
+        for _ in 0..n_tiles {
             hashes.push([rng.next_u64(), rng.next_u64(), rng.next_u64()]);
         }
         Self { hashes, def_to_move: rng.next_u64(), board_len }
@@ -64,7 +64,18 @@ impl ZobristTable {
 }
 
 struct TranspositionTable {
+    table: HashMap<u64, (i32, u8)>, // score, depth
+    size: usize
+}
 
+impl TranspositionTable {
+    fn new(size: usize) -> Self {
+        Self { table: HashMap::with_capacity(size), size }
+    }
+    
+    fn insert(&mut self, hash: u64, data: (i32, u8)) -> Option<(i32, u8)> {
+        self.table.insert(hash % self.size as u64, data)
+    }
 }
 
 impl From<BoardError> for AiError {
@@ -153,12 +164,8 @@ impl BasicAi {
             .count() * 10) as i32;
 
         // Penalise repetitions
-        let rep_score = (state.repetitions.get_repetitions(self.side) * 10) as i32;
-        if self.side == Attacker {
-            score -= rep_score
-        } else {
-            score += rep_score
-        };
+        score -= (state.repetitions.get_repetitions(Attacker) * 10) as i32;
+        score += (state.repetitions.get_repetitions(Defender) * 10) as i32;
         
         score
     }
