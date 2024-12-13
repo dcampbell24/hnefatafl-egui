@@ -48,7 +48,7 @@ impl<T: BoardState + Send + 'static> MyApp<T> {
         let (g2ai_tx, g2ai_rx) = std::sync::mpsc::channel::<Message<T>>();
         let (ai2g_tx, ai2g_rx) = std::sync::mpsc::channel::<Message<T>>();
         let ai_thread = thread::spawn(move || {
-            let mut ai = BasicAi::new(game.logic, setup.ai_side);
+            let mut ai = BasicAi::new(game.logic, setup.ai_side, 4);
             loop {
                 if let Ok(Message::Request(state, ctx)) = g2ai_rx.recv() {
                     if let Ok(play) = ai.next_play(&state) {
@@ -115,8 +115,8 @@ fn main() {
         Box::new(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
             Ok(Box::new(MyApp::<MediumBasicBoardState>::new(cc, GameSetup {
-                ruleset: rules::COPENHAGEN,
-                starting_board: boards::COPENHAGEN,
+                ruleset: rules::BRANDUBH,
+                starting_board: boards::BRANDUBH,
                 //starting_board: "4t6/5t5/3t1ttt3/1tt2T2tt1/1t2TTT2t1/tt1TTKTT1tt/1t2TTT2t1/1tt2T2tt1/3ttttt3/5t5/11",
                 ai_side: Defender 
             })))
