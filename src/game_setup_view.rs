@@ -1,11 +1,13 @@
-use crate::game_view::GameSetup;
+use crate::game_play_view::GameSetup;
 use hnefatafl::pieces;
 use hnefatafl::rules::Ruleset;
 use std::collections::HashMap;
 use std::time::Duration;
+use hnefatafl::preset::{boards, rules};
 
 pub(crate) enum GameSetupAction {
-    StartGame(GameSetup)
+    StartGame(GameSetup),
+    Quit
 }
 
 pub(crate) struct GameSetupView {
@@ -22,9 +24,11 @@ impl GameSetupView {
         variants: HashMap<String, (Ruleset, String)>,
         ai_sides: HashMap<String, pieces::Side>,
     ) -> Self {
-        let variant_keys: Vec<String> = variants.keys().cloned().collect();
+        let mut variant_keys: Vec<String> = variants.keys().cloned().collect();
+        variant_keys.sort();
         let selected_variant = variant_keys.first().expect("No variants provided.").clone();
-        let side_keys: Vec<String> = ai_sides.keys().cloned().collect();
+        let mut side_keys: Vec<String> = ai_sides.keys().cloned().collect();
+        side_keys.sort();
         let selected_ai_side = side_keys.first().expect("No sides provided.").clone();
 
         Self { variants, ai_sides, ai_time: 1, selected_variant, selected_ai_side }
@@ -62,11 +66,29 @@ impl GameSetupView {
                             starting_board,
                             ai_side: self.ai_sides[&self.selected_ai_side],
                             ai_time: Duration::from_secs(self.ai_time as u64),
-                    }))
+                    }));
+                }
+                if ui.button("Quit").clicked() {
+                    action = Some(GameSetupAction::Quit);
                 }
             });
         });
         action
     }
 
+}
+
+impl Default for GameSetupView {
+    fn default() -> Self {
+        let mut variants: HashMap<String, (Ruleset, String)> = HashMap::default();
+        variants.insert("Copenhagen".to_string(), (rules::COPENHAGEN, boards::COPENHAGEN.to_string()));
+        variants.insert("Brandubh".to_string(), (rules::BRANDUBH, boards::BRANDUBH.to_string()));
+        variants.insert("Tablut".to_string(), (rules::TABLUT, boards::TABLUT.to_string()));
+
+        let mut sides: HashMap<String, pieces::Side> = HashMap::default();
+        sides.insert("Attacker".to_string(), pieces::Side::Attacker);
+        sides.insert("Defender".to_string(), pieces::Side::Defender);
+
+        Self::new(variants, sides)
+    }
 }
