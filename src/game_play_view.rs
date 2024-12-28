@@ -9,8 +9,16 @@ use hnefatafl::pieces;
 use hnefatafl::pieces::Side::Defender;
 use hnefatafl::play::{Play, PlayRecord};
 use hnefatafl::rules::Ruleset;
-use std::thread;
-use std::thread::JoinHandle;
+#[cfg(target_arch = "wasm32")]
+use wasm_thread::{
+    self as thread,
+    JoinHandle
+};
+#[cfg(not(target_arch = "wasm32"))]
+use std::{
+    thread,
+    thread::JoinHandle
+};
 use std::time::Duration;
 
 enum Message<T: BoardState> {
@@ -55,7 +63,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
                     if let Ok(play) = ai.next_play(&state) {
                         ai2g_tx.send(Message::Response(play, state))
                             .expect("Failed to send response");
-                        ctx.request_repaint()
+                        //ctx.request_repaint()
                     }
                 } else {
                     break

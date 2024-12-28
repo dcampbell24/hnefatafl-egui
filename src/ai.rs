@@ -15,7 +15,8 @@ use rand::{thread_rng, Rng, RngCore};
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 use hnefatafl::pieces;
 
 #[derive(Default)]
@@ -166,6 +167,10 @@ impl BasicAi {
             side,
             logic,
             zt: ZobristTable::new(logic.board_geo.side_len, &mut rng),
+            // Smaller capacity on WASM
+            #[cfg(target_arch = "wasm32")]
+            tt: RefCell::from(TranspositionTable::new(2 << 16)),
+            #[cfg(not(target_arch = "wasm32"))]
             tt: RefCell::from(TranspositionTable::new(2 << 28)),
             rng,
             time_to_play
@@ -234,7 +239,7 @@ impl BasicAi {
         stats: &mut SearchStats
     ) -> i32 {
         stats.states += 1;
-        let state = self.logic.do_play(play, starting_state).expect("Invalid play.").0;
+        let state = self.logic.do_play(play, starting_state).expect("Invalid play").0;
         let hash = self.zt.hash(state.board, state.side_to_play);
         if let Some(node) = self.tt.borrow().get(hash) {
             if node.depth >= depth {
@@ -410,7 +415,7 @@ impl Ai for BasicAi {
             }
 
         }*/
-        
+
         let mut stats = SearchStats::default();
         let start_time = Instant::now();
         let (best_play, best_score) = self.iddfs(
