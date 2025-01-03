@@ -31,7 +31,7 @@ impl GameSetupView {
         side_keys.sort();
         let selected_ai_side = side_keys.first().expect("No sides provided.").clone();
 
-        Self { variants, ai_sides, ai_time: 1, selected_variant, selected_ai_side }
+        Self { variants, ai_sides, ai_time: 5, selected_variant, selected_ai_side }
     }
 
     pub(crate) fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<GameSetupAction> {
@@ -60,9 +60,11 @@ impl GameSetupView {
                 ui.add(egui::Slider::new(&mut self.ai_time, 1..=60));
                 ui.end_row();
                 if ui.button("Start game").clicked() {
-                    let (ruleset, starting_board) = self.variants[&self.selected_variant].clone();
+                    let ruleset_name = self.selected_variant.clone();
+                    let (ruleset, starting_board) = self.variants[&ruleset_name].clone();
                     action = Some(GameSetupAction::StartGame(GameSetup {
                             ruleset,
+                            ruleset_name,
                             starting_board,
                             ai_side: self.ai_sides[&self.selected_ai_side],
                             ai_time: Duration::from_secs(self.ai_time as u64),

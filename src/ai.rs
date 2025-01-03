@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use crate::ai::AiError::NoPlayAvailable;
+use crate::ai::AiError::{NoPlayAvailable, NotMyTurn};
 use hnefatafl::board::state::BoardState;
 use hnefatafl::error::BoardError;
 use hnefatafl::game::logic::GameLogic;
@@ -16,8 +16,12 @@ use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration;
-use web_time::Instant;
 use hnefatafl::pieces;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
+
 
 #[derive(Default)]
 pub(crate) struct SearchStats {
@@ -32,7 +36,8 @@ pub(crate) struct SearchStats {
 
 pub(crate) enum AiError {
     BoardError(BoardError),
-    NoPlayAvailable
+    NoPlayAvailable,
+    NotMyTurn
 }
 
 struct ZobristTable {
@@ -123,7 +128,7 @@ impl From<BoardError> for AiError {
 }
 
 pub trait Ai {
-    fn next_play<T: BoardState>(&mut self, game_state: &GameState<T>) -> Result<Play, AiError>;
+    fn next_play<T: BoardState>(&mut self, game_state: &GameState<T>) -> Result<(Play, Vec<String>), AiError>;
 }
 
 pub struct RandomAi {
@@ -139,7 +144,7 @@ impl RandomAi {
 }
 
 impl Ai for RandomAi {
-    fn next_play<T: BoardState>(&mut self, game_state: &GameState<T>) -> Result<Play, AiError> {
+    fn next_play<T: BoardState>(&mut self, game_state: &GameState<T>) -> Result<(Play, Vec<String>), AiError> {
         let mut plays: Vec<Play> = vec![];
         for t in game_state.board.iter_occupied(self.side) {
             for p in self.logic.iter_plays(t, game_state)? {
@@ -147,7 +152,7 @@ impl Ai for RandomAi {
             }
         }
         sleep(Duration::from_millis(500));
-        Ok(plays[self.rng.next_u32() as usize % plays.len()])
+        Ok((plays[self.rng.next_u32() as usize % plays.len()], vec![]))
     }
 }
 
@@ -382,40 +387,10 @@ impl BasicAi {
 }
 
 impl Ai for BasicAi {
-    fn next_play<T: BoardState>(&mut self, game_state: &GameState<T>) -> Result<Play, AiError> {
-        /*let (mut benchmark, cmp_fn, maximize): (i32, fn(i32, i32) -> bool, bool) =
-            if self.side == Defender {
-                (i32::MAX, |x, y| x < y, true)
-            } else {
-                (i32::MIN, |x, y| x > y, false)
-            };
-        let mut best: Option<Play> = None;
-        let mut stats = SearchStats::default();
-        let start = Instant::now();
-        let mut candidates: Vec<(Play, GameState<T>, i32)> = vec![];
-        for t in game_state.board.iter_occupied(self.side) {
-            for p in self.logic.iter_plays(t, game_state)? {
-                let state = self.logic.do_valid_play(p, *game_state).0;
-                candidates.push((p, state, self.lookup_tt(&state).unwrap_or(benchmark)));
-            }
+    fn next_play<T: BoardState>(&mut self, game_state: &GameState<T>) -> Result<(Play, Vec<String>), AiError> {
+        if game_state.side_to_play != self.side {
+            return Err(NotMyTurn)
         }
-        candidates.sort_by_key(|c| c.2); // low first
-        if self.side == Attacker {
-            candidates.reverse();
-        }
-        for (p, _, s) in &candidates {
-            println!("{p}: {s}");
-        }
-        for (p, state, _) in &candidates {
-            let score = self.minimax(&state, self.depth, maximize, i32::MIN, i32::MAX, &mut stats);
-
-            if best == None || cmp_fn(score, benchmark) {
-                benchmark = score;
-                best = Some(*p);
-            }
-
-        }*/
-
         let mut stats = SearchStats::default();
         let start_time = Instant::now();
         let (best_play, best_score) = self.iddfs(
@@ -423,19 +398,19 @@ impl Ai for BasicAi {
             self.side == Attacker,
             &mut stats
         );
-
-
-        println!("Searched {} paths ({} states) in {}s.",
-                 stats.paths, stats.states, start_time.elapsed().as_secs_f32());
-        println!("Maximum depth searched: {}", stats.max_depth);
-        println!("Pruned {} paths.", stats.ab_prunes);
         
-        println!("TT hits: {}, insertions: {}, replacements: {}.", stats.tt_hits, stats.tt_inserts, stats.tt_replacements);
-
+        let log_lines: Vec<String> = vec![
+            format!("Searched {} paths ({} states) in {}s.",
+                     stats.paths, stats.states, start_time.elapsed().as_secs_f32()),
+            format!("Maximum depth searched: {}", stats.max_depth),
+            format!("Pruned {} paths.", stats.ab_prunes),
+            
+            format!("TT hits: {}, insertions: {}, replacements: {}.", stats.tt_hits, stats.tt_inserts, stats.tt_replacements)
+        ];
         
         if let Some(p) = best_play {
             println!("Best play: {p}, score: {best_score}");
-            Ok(p)
+            Ok((p, log_lines))
         } else {
             println!("No play found");
             Err(NoPlayAvailable)
