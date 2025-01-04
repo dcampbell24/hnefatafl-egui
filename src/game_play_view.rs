@@ -23,7 +23,7 @@ use wasm_thread::{
 };
 
 enum Message<T: BoardState> {
-    Request(GameState<T>, egui::Context),
+    Request(GameState<T>),
     Response(Play, GameState<T>, Vec<String>)
 }
 
@@ -53,7 +53,7 @@ pub(crate) struct GamePlayView<T: BoardState> {
 }
 
 impl<T: BoardState + Send + 'static> GamePlayView<T> {
-    pub(crate) fn new(egui_ctx: &egui::Context, setup: GameSetup) -> Self {
+    pub(crate) fn new(setup: GameSetup) -> Self {
         let game: Game<T> = Game::new(setup.ruleset, &setup.starting_board).unwrap();
         let board = Board::new(&game, setup.ai_side.other());
         let (g2ai_tx, g2ai_rx) = std::sync::mpsc::channel::<Message<T>>();
@@ -61,7 +61,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
         let ai_thread = thread::spawn(move || {
             let mut ai = BasicAi::new(game.logic, setup.ai_side, setup.ai_time);
             loop {
-                if let Ok(Message::Request(state, ctx)) = g2ai_rx.recv() {
+                if let Ok(Message::Request(state)) = g2ai_rx.recv() {
                     if let Ok((play, lines)) = ai.next_play(&state) {
                         ai2g_tx.send(Message::Response(play, state, lines))
                             .expect("Failed to send response");
@@ -73,7 +73,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
             }
         });
         if setup.ai_side == setup.ruleset.starting_side {
-            g2ai_tx.send(Message::Request(game.state, egui_ctx.clone())).expect("Failed to send request");
+            g2ai_tx.send(Message::Request(game.state)).expect("Failed to send request");
         }
         let log_lines = vec![
             format!(
@@ -108,7 +108,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
         if let Some(human_play) = self.board_ui.update(&self.game, ctx, ui) {
             self.game.do_play(human_play).unwrap();
             self.log_lines.push(format!("{:?} played {}", self.ai_side.other(), human_play));
-            self.ai_sender.send(Message::Request(self.game.state, ctx.clone()))
+            self.ai_sender.send(Message::Request(self.game.state))
                 .expect("Failed to send request");
         }
         if let Over(outcome) = self.game.state.status {
@@ -124,7 +124,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
         }
     }
     
-    pub(crate) fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<GamePlayAction> {
+    pub(crate) fn update(&mut self, ctx: &egui::Context) -> Option<GamePlayAction> {
         let mut action: Option<GamePlayAction> = None;
         egui::TopBottomPanel::bottom("log_pane").show(ctx, |ui| {
             ui.vertical(|ui| {
@@ -135,6 +135,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
                     if ui.button("Quit game").clicked() {
                         action = Some(GamePlayAction::QuitGame)
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
                     if ui.button("Quit app").clicked() {
                         action = Some(GamePlayAction::QuitApp)
                     }
@@ -151,7 +152,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
         });
         if let Some(GamePlayAction::UndoPlay) = action {
             self.game.undo_last_play();
-            self.ai_sender.send(Message::Request(self.game.state, ctx.clone()))
+            self.ai_sender.send(Message::Request(self.game.state))
                 .expect("Failed to send request");
 
         }

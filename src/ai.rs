@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use crate::ai::AiError::{NoPlayAvailable, NotMyTurn};
 use hnefatafl::board::state::BoardState;
 use hnefatafl::error::BoardError;
@@ -6,21 +5,20 @@ use hnefatafl::game::logic::GameLogic;
 use hnefatafl::game::state::GameState;
 use hnefatafl::game::GameOutcome::{Draw, Win};
 use hnefatafl::game::GameStatus::{Ongoing, Over};
+use hnefatafl::pieces;
 use hnefatafl::pieces::PieceType::{King, Soldier};
 use hnefatafl::pieces::Side::{Attacker, Defender};
-use hnefatafl::pieces::{Piece, Side};
+use hnefatafl::pieces::{Piece, Side, KING};
 use hnefatafl::play::Play;
 use rand::rngs::ThreadRng;
 use rand::{thread_rng, Rng, RngCore};
-use std::cmp::{max, min};
-use std::collections::HashMap;
+use std::cmp::min;
 use std::thread::sleep;
 use std::time::Duration;
-use hnefatafl::pieces;
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+#[cfg(target_arch = "wasm32")]
+use web_time::Instant;
 
 
 #[derive(Default)]
@@ -84,7 +82,7 @@ impl ZobristTable {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum NodeType {
     LowerBound,
     UpperBound,
@@ -98,26 +96,103 @@ struct Node {
     node_type: NodeType
 }
 
+#[derive(Clone, Copy, Debug)]
+struct TTEntry {
+    hash: u64,
+    depth: u8,
+    score: i32,
+    node_type: NodeType,
+    best_play: Option<Play>,
+    age: u8
+}
+
+impl TTEntry {
+    fn new(
+        hash: u64,
+        depth: u8,
+        score: i32,
+        node_type: NodeType,
+        best_play: Option<Play>,
+        age: u8
+    ) -> Self {
+        Self { hash, depth, score, node_type, best_play, age }
+    }
+}
+
 pub(crate) struct TranspositionTable {
-    table: HashMap<u64, Node>,
-    size: usize
+    entries: Vec<Option<TTEntry>>,
+    size: usize,
+    current_age: u8
 }
 
 impl TranspositionTable {
-    fn new(size: usize) -> Self {
-        Self { table: HashMap::with_capacity(size), size }
+    fn new(size_mb: usize) -> Self {
+        let entry_size = std::mem::size_of::<Option<TTEntry>>();
+        let n_entries = (size_mb * 1024 * 1024) / entry_size;
+        Self {
+            entries: vec![None; n_entries],
+            size: n_entries,
+            current_age: 0
+        }
+    }
+
+    fn new_search(&mut self) {
+        self.current_age = self.current_age.wrapping_add(1);
+    }
+
+    fn get_index(&self, hash: u64) -> usize {
+        (hash as usize) % self.size
+    }
+
+    fn insert(
+        &mut self,
+        hash: u64,
+        depth: u8,
+        score: i32,
+        node_type: NodeType,
+        best_play: Option<Play>,
+        stats: &mut SearchStats
+    ) {
+        let index = self.get_index(hash);
+        let entry = TTEntry::new(hash, depth, score, node_type, best_play, self.current_age);
+
+        if let Some(existing) = &self.entries[index] {
+            // Replace if:
+            // 1. New entry is from current search (newer age) and old entry is from previous search
+            // 2. New entry has greater or equal depth
+            // 3. Hash collision occurred (different position)
+            if (entry.age != existing.age && entry.age == self.current_age) ||
+                (entry.depth >= existing.depth) ||
+                (existing.hash != hash) {
+                self.entries[index] = Some(entry);
+                stats.tt_replacements += 1;
+            } 
+        } else {
+            self.entries[index] = Some(entry);
+            stats.tt_inserts += 1;
+        }
     }
     
-    fn insert(&mut self, hash: u64, data: Node) -> Option<Node> {
-        self.table.insert(hash % self.size as u64, data)
+    fn probe(&self, hash: u64) -> Option<TTEntry> {
+        let index = self.get_index(hash);
+        self.entries[index].and_then(|e| {
+            // Verify correct hash (in case of collision)
+            if e.hash == hash {
+                Some(e)
+            } else {
+                None
+            }
+        })
+    }
+    
+    fn clear(&mut self) {
+        self.entries.fill(None);
+        self.current_age = 0;
     }
 
-    fn get(&self, hash: u64) -> Option<&Node> {
-        self.table.get(&(&hash % self.size as u64))
-    }
-
-    fn get_mut(&mut self, hash: u64) -> Option<&mut Node> {
-        self.table.get_mut(&(&hash % self.size as u64))
+    fn usage(&self) -> f64 {
+        let used = self.entries.iter().filter(|e| e.is_some()).count();
+        used as f64 / self.size as f64
     }
 }
 
@@ -160,12 +235,13 @@ pub struct BasicAi {
     side: Side,
     logic: GameLogic,
     zt: ZobristTable,
-    tt: RefCell<TranspositionTable>,
+    tt: TranspositionTable,
     rng: ThreadRng,
     time_to_play: Duration
 }
 
 impl BasicAi {
+    
     pub(crate) fn new(logic: GameLogic, side: Side, time_to_play: Duration) -> Self {
         let mut rng = thread_rng();
         Self {
@@ -174,14 +250,16 @@ impl BasicAi {
             zt: ZobristTable::new(logic.board_geo.side_len, &mut rng),
             // Smaller capacity on WASM
             #[cfg(target_arch = "wasm32")]
-            tt: RefCell::from(TranspositionTable::new(2 << 16)),
+            tt: TranspositionTable::new(128),
             #[cfg(not(target_arch = "wasm32"))]
-            tt: RefCell::from(TranspositionTable::new(2 << 28)),
+            tt: TranspositionTable::new(512),
             rng,
             time_to_play
         }
     }
     
+    /// Evaluate board state and return a score. Higher = better for attacker, lower = better for
+    /// defender.
     fn eval_board<T: BoardState>(&self, board: &T) -> i32 {
         let mut score = 0i32;
         let att_count = board.count_pieces(Attacker) as i32;
@@ -210,6 +288,8 @@ impl BasicAi {
         score
     }
     
+    /// Evaluate game state (board state + repetitions) and return a score. Higher = better for
+    /// attacker, lower = better for defender.
     fn eval_state<T: BoardState>(&self, state: &GameState<T>, depth: u8) -> i32 {
         if let Over(Win(_, winner)) = state.status {
             // prox_penalty is larger the further down the tree we had to search to get the win.
@@ -232,9 +312,66 @@ impl BasicAi {
         
         score
     }
+    
+    /// Quickly evaluate a play. Used in play ordering.
+    fn eval_play<T: BoardState>(&self, play: Play, state: &GameState<T>) -> i32 {
+        let mut score = 0i32;
+        let to = play.to();
+        let board = &state.board;
+        let moving_piece = board.get_piece(play.from).expect("No piece to move.");
 
+        // Prioritise capture plays
+        score += (self.logic.get_captures(play, moving_piece, state).len() as i32) * 1000;
+        
+        // King-specific plays
+        if moving_piece == KING {
+            // Bonus for king moves towards edges (escape routes)
+            let to_edge_dist = min(
+                min(to.row, self.logic.board_geo.side_len - 1 - to.row),
+                min(to.col, self.logic.board_geo.side_len - 1 - to.col)
+            );
+            score += (4 - to_edge_dist as i32) * 300;
+
+            // Penalty for moving king next to attackers
+            let hostile_neighbors = self.logic.board_geo.neighbors(to)
+                .iter()
+                .filter(|pos| {
+                    board.get_piece(**pos)
+                        .map_or(false, |p| p.side == Attacker)
+                })
+                .count();
+            score -= (hostile_neighbors as i32) * 400;
+        }
+
+        // 3. Mobility scoring
+        let mobility = self.logic.board_geo.neighbors(to)
+            .iter()
+            .filter(|pos| board.get_piece(**pos).is_none())
+            .count();
+        score += (mobility as i32) * 50;
+        
+        score
+    }
+    
+    fn order_plays<T: BoardState>(&self, plays: Vec<Play>, state: &GameState<T>, tt_play: Option<Play>) -> Vec<Play> {
+        let mut scored_plays: Vec<(Play, i32)> = plays.into_iter()
+            .map(|p| (p, self.eval_play(p, state)))
+            .collect();
+        
+        // If we have a TT move, give it maximum priority
+        if let Some(tp) = tt_play {
+            if let Some(pos) = scored_plays.iter().position(|(p, _)| p == &tp) {
+                scored_plays[pos].1 = i32::MAX;
+            }
+        }
+        
+        scored_plays.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        scored_plays.into_iter().map(|ps| ps.0).collect()
+    }
+
+    /// The minimax algorithm. Returns (best score, best play) tuple.
     pub(crate) fn minimax<T: BoardState>(
-        &self,
+        &mut self,
         play: Play,
         starting_state: GameState<T>,
         depth: u8,
@@ -242,112 +379,133 @@ impl BasicAi {
         mut alpha: i32,
         mut beta: i32,
         stats: &mut SearchStats
-    ) -> i32 {
+    ) -> (i32, Option<Play>) {
         stats.states += 1;
         let state = self.logic.do_play(play, starting_state).expect("Invalid play").0;
         let hash = self.zt.hash(state.board, state.side_to_play);
-        if let Some(node) = self.tt.borrow().get(hash) {
-            if node.depth >= depth {
+        
+        if let Some(tt_entry) = self.tt.probe(hash) {
+            // Found entry in transposition table
+            if tt_entry.depth > depth {
                 stats.tt_hits += 1;
-                match node.node_type {
-                    NodeType::Exact => return node.score,
-                    NodeType::LowerBound if node.score >= beta => return beta,
-                    NodeType::UpperBound if node.score <= alpha => return alpha,
+                match tt_entry.node_type {
+                    NodeType::Exact => return (tt_entry.score, tt_entry.best_play),
+                    NodeType::LowerBound if tt_entry.score >= beta => return (beta, tt_entry.best_play),
+                    NodeType::UpperBound if tt_entry.score <= alpha => return (alpha, tt_entry.best_play),
                     _ => {}
                 }
+
             }
-        };
+        }
+        
         if depth == 0 || state.status != Ongoing {
+            // Leaf node
             stats.paths += 1;
-            return self.eval_state(&state, depth);
+            return (self.eval_state(&state, depth), None);
         }
         
         let mut node_type = NodeType::Exact;
         let mut best_score = if maximize { i32::MIN } else { i32::MAX };
+        let mut best_play: Option<Play> = None;
+        
+        // Collect and sort moves
+        let mut plays = Vec::new();
+        for t in state.board.iter_occupied(state.side_to_play) {
+            for p in self.logic.iter_plays(t, &state).expect("Could not iterate plays") {
+                plays.push(p);
+            }
+        }
+
+        let tt_play = self.tt.probe(hash).and_then(|entry| entry.best_play);
+        let plays = self.order_plays(plays, &state, tt_play);
+        
         if maximize {
-            'outer: for t in state.board.iter_occupied(state.side_to_play) {
-                for p in self.logic.iter_plays(t, &state).unwrap() {
-                    let mm_score = self.minimax(p, state, depth-1, false, alpha, beta, stats);
-                    if mm_score > best_score {
-                        node_type = NodeType::Exact;
-                        best_score = mm_score;
-                    }
-                    alpha = max(alpha, mm_score);
-                    if alpha >= beta {
-                        stats.ab_prunes += 1;
-                        node_type = NodeType::LowerBound;
-                        break 'outer
-                    }
+            for p in plays {
+                let (score, _) = self.minimax(p, state, depth-1, false, alpha, beta, stats);
+                if score > best_score {
+                    node_type = NodeType::Exact;
+                    best_score = score;
+                    best_play = Some(p);
                 }
+                alpha = alpha.max(score);
+                if alpha >= beta {
+                    stats.ab_prunes += 1;
+                    node_type = NodeType::LowerBound;
+                    break
+                }
+                
             }
         } else {
-            'outer: for t in state.board.iter_occupied(state.side_to_play) {
-                for p in self.logic.iter_plays(t, &state).unwrap() {
-                    let mm_score = self.minimax(p, state, depth-1, true, alpha, beta, stats);
-                    if mm_score < best_score {
-                        node_type = NodeType::Exact;
-                        best_score = mm_score;
-                    }
-                    beta = min(beta, mm_score);
-                    if alpha >= beta {
-                        stats.ab_prunes += 1;
-                        node_type = NodeType::UpperBound;
-                        break 'outer
-                    }
+            for p in plays {
+                let (score, _) = self.minimax(p, state, depth-1, true, alpha, beta, stats);
+                if score < best_score {
+                    node_type = NodeType::Exact;
+                    best_score = score;
+                    best_play = Some(p);
                 }
+                beta = beta.min(score);
+                if alpha >= beta {
+                    stats.ab_prunes += 1;
+                    node_type = NodeType::UpperBound;
+                    break
+                }
+                
             }
         }
-        if let Some(_) = self.tt.borrow_mut().insert(hash, Node {
-            depth,
-            score: best_score,
-            node_type,
-        }) {
-            stats.tt_replacements += 1;
-        } else {
-            stats.tt_inserts += 1;
-        }
-        best_score
+        
+        // Store in transposition table
+        self.tt.insert(hash, depth, best_score, node_type, best_play, stats);
+        
+        (best_score, best_play)
     }
 
     /// Perform minimax search (with alpha beta pruning) up to the given depth.
     fn search_to_depth<T: BoardState>(
-        &self,
+        &mut self,
         depth: u8,
         state: GameState<T>,
         maximize: bool,
         stats: &mut SearchStats,
         cutoff_time: Instant
     ) -> (Option<Play>, i32, bool) {
+        
+        let mut plays: Vec<(Play, GameState<T>)> = Vec::new();
+        for t in state.board.iter_occupied(state.side_to_play) {
+            for p in self.logic.iter_plays(t, &state).expect("Could not iterate plays") {
+                let next_state = self.logic.do_play(p, state).expect("Invalid play").0;
+                plays.push((p, next_state));
+            }
+        }
 
         let mut best_score = if maximize { i32::MIN } else { i32::MAX };
         let mut best_play: Option<Play> = None;
         
-        for t in state.board.iter_occupied(self.side) {
-            for p in self.logic.iter_plays(t, &state).expect("Cannot iterate plays.") {
-                if Instant::now() > cutoff_time {
-                    return (best_play, best_score, true);
-                }
-                // Not really sure why we need to negate maximize here but the algo definitely
-                // performs better when we do...
-                let s = self.minimax(p, state, depth, !maximize, i32::MIN, i32::MAX, stats);
-                if maximize && (s > best_score) {
-                    best_score = s;
-                    best_play = Some(p);
-                } else if (!maximize) && (s < best_score) {
-                    best_score = s;
-                    best_play = Some(p);
-                }
+        for (play, _) in plays {
+            if Instant::now() > cutoff_time {
+                return (best_play, best_score, true);
+            }
+            // Not really sure why we need to negate maximize here but the algo definitely
+            // performs better when we do...
+            let (score, _) = self.minimax(play, state, depth, !maximize, i32::MIN, i32::MAX, stats);
+            if maximize && (score > best_score) {
+                best_score = score;
+                best_play = Some(play);
+            } else if (!maximize) && (score < best_score) {
+                best_score = score;
+                best_play = Some(play);
             }
         }
+        
         (best_play, best_score, false)
     }
 
     fn iddfs<T: BoardState>(
-        &self,
+        &mut self,
         state: GameState<T>,
         maximize: bool,
         stats: &mut SearchStats
     ) -> (Option<Play>, i32) {
+        self.tt.new_search();
         let mut depth = 1;
         let mut best_play: Option<Play> = None;
         let mut best_score: i32 = if maximize { i32::MIN } else { i32::MAX };
@@ -376,14 +534,6 @@ impl BasicAi {
         }
     }
     
-    fn lookup_tt<T: BoardState>(&self, state: &GameState<T>) -> Option<i32> {
-        let hash = self.zt.hash(state.board, state.side_to_play);
-        if let Some(node) = self.tt.borrow().get(hash) {
-            Some(node.score)
-        } else {
-            None
-        }
-    }
 }
 
 impl Ai for BasicAi {

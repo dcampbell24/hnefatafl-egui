@@ -7,6 +7,7 @@ use hnefatafl::preset::{boards, rules};
 
 pub(crate) enum GameSetupAction {
     StartGame(GameSetup),
+    ViewAbout,
     Quit
 }
 
@@ -34,7 +35,7 @@ impl GameSetupView {
         Self { variants, ai_sides, ai_time: 5, selected_variant, selected_ai_side }
     }
 
-    pub(crate) fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<GameSetupAction> {
+    pub(crate) fn update(&mut self, ctx: &egui::Context) -> Option<GameSetupAction> {
         let mut action: Option<GameSetupAction> = None;
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::Grid::new("game_setup_grid").show(ui, |ui| {
@@ -42,7 +43,7 @@ impl GameSetupView {
                 egui::ComboBox::from_id_salt("variant")
                     .selected_text(&self.selected_variant)
                     .show_ui(ui, |combo_box| {
-                        for (k, v) in &self.variants {
+                        for (k, _) in &self.variants {
                             combo_box.selectable_value(&mut self.selected_variant, k.clone(), k.as_str());
                         }
                     });
@@ -70,6 +71,10 @@ impl GameSetupView {
                             ai_time: Duration::from_secs(self.ai_time as u64),
                     }));
                 }
+                if ui.button("About").clicked() {
+                    action = Some(GameSetupAction::ViewAbout)
+                }
+                #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("Quit").clicked() {
                     action = Some(GameSetupAction::Quit);
                 }

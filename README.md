@@ -1,4 +1,15 @@
+This is a basic Hnefatafl app designed to demonstrate what you can build with the
+[`hnefatafl-rs`](https://crates.io/crates/hnefatafl) crate in Rust. You can play a few different variants against a
+basic AI. It uses the [`egui`](https://crates.io/crates/egui) GUI library and can be built as a native or web app.
 
+# Building
+
+First, clone the git repo and navigate to the cloned directory.
+
+```shell
+git clone https://github.com/bunburya/hnefatafl-egui.git
+cd hnefatafl-egui
+```
 
 ## Native
 
@@ -12,7 +23,7 @@ You will then find the `hnefatafl-egui` executable in the `target/release/` dire
 
 ## Web
 
-Because we use are using threads (via the `wasm-thread` crate), we need to use nightly Rust. Build with
+Because we use are using threads (via the `wasm-thread` crate), we need to use nightly Rust. Build with:
 
 ```shell
 RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals" cargo build --target=wasm32-unknown-unknown --release -Z build-std=panic_abort,std
