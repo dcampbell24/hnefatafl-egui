@@ -1,12 +1,12 @@
-use std::collections::{HashMap, HashSet};
 use eframe::epaint::Color32;
-use egui::{include_image, ImageSource, Rect, Response, Vec2};
+use egui::{Align2, FontId, Rect, Response, Vec2};
 use hnefatafl::board::state::BoardState;
 use hnefatafl::game::Game;
 use hnefatafl::pieces;
 use hnefatafl::pieces::{Piece, PieceType};
 use hnefatafl::play::{Play, PlayRecord};
 use hnefatafl::tiles::{Axis, Tile};
+use std::collections::{HashMap, HashSet};
 
 const TILE_LENGTH: f32 = 32.0;
 
@@ -28,26 +28,26 @@ const TILE_COLORS: TileColors = TileColors {
     possible_dest: Color32::from_rgb(200, 240, 200)
 };
 
-struct ImageSources<'a> {
-    king: ImageSource<'a>,
-    white_soldier: ImageSource<'a>,
-    black_soldier: ImageSource<'a>,
-    up_arrow: ImageSource<'a>,
-    down_arrow: ImageSource<'a>,
-    left_arrow: ImageSource<'a>,
-    right_arrow: ImageSource<'a>,
-    captured_tile: ImageSource<'a>
+struct Figures {
+    king: char,
+    white_soldier: char,
+    black_soldier: char,
+    up_arrow: char,
+    down_arrow: char,
+    left_arrow: char,
+    right_arrow: char,
+    captured_tile: char,
 }
 
-const IMAGES: ImageSources = ImageSources {
-    king: include_image!("../res/assets/icons/king-white.svg"),
-    white_soldier: include_image!("../res/assets/icons/pawn-white.svg"),
-    black_soldier: include_image!("../res/assets/icons/pawn-black.svg"),
-    up_arrow: include_image!("../res/assets/icons/arrow-up.svg"),
-    down_arrow: include_image!("../res/assets/icons/arrow-down.svg"),
-    left_arrow: include_image!("../res/assets/icons/arrow-left.svg"),
-    right_arrow: include_image!("../res/assets/icons/arrow-right.svg"),
-    captured_tile: include_image!("../res/assets/icons/x.svg")
+const FIGURES: Figures = Figures {
+    king: '♚',
+    white_soldier: '♟',
+    black_soldier: '♙',
+    up_arrow: '⬆',
+    down_arrow: '⬇',
+    left_arrow: '⬅',
+    right_arrow: '➡',
+    captured_tile: '🗙'
 };
 
 struct TileState {
@@ -79,12 +79,12 @@ pub(crate) struct Board {
     selected_tiles: (Option<Tile>, Option<Tile>),
     possible_dests: HashSet<Tile>,
     last_play: Option<PlayRecord>,
-    player_side: pieces::Side
+    human_side: pieces::Side
 }
 
 impl Board {
 
-    pub(crate) fn new<T: BoardState>(game: &Game<T>, player_side: pieces::Side) -> Self {
+    pub(crate) fn new<T: BoardState>(game: &Game<T>, human_side: pieces::Side) -> Self {
         let mut tile_state: HashMap<Tile, TileState> = HashMap::new();
         for tile in game.logic.board_geo.iter_tiles() {
             tile_state.insert(tile, TileState::new(
@@ -99,7 +99,7 @@ impl Board {
             selected_tiles: (None, None),
             possible_dests: HashSet::new(),
             last_play: None,
-            player_side
+            human_side
         }
     }
     fn update_tile_state<T: BoardState>(&mut self, board_state: T) {
@@ -145,7 +145,7 @@ impl Board {
         for (response, rect, color, tile) in responses {
             if response.clicked() {
                 if game.state.board.get_piece(tile).is_some_and(|p|
-                    p.side == game.state.side_to_play && p.side == self.player_side
+                    p.side == game.state.side_to_play && p.side == self.human_side
                 ) {
                     // We have clicked on a tile containing our own piece and it is our turn
                     self.selected_tiles.0 = Some(tile);
@@ -163,28 +163,28 @@ impl Board {
             }
             painter.rect_filled(rect, 0.0, color);
 
-            let img = if let Some(piece) = game.state.board.get_piece(tile) {
+            let fig_opt = if let Some(piece) = game.state.board.get_piece(tile) {
                 Some(match piece {
-                    Piece {piece_type: PieceType::King, side: pieces::Side::Defender} => IMAGES.king,
-                    Piece {piece_type: PieceType::Soldier, side: pieces::Side::Defender} => IMAGES.white_soldier,
-                    Piece {piece_type: PieceType::Soldier, side: pieces::Side::Attacker} => IMAGES.black_soldier,
+                    Piece {piece_type: PieceType::King, side: pieces::Side::Defender} => FIGURES.king,
+                    Piece {piece_type: PieceType::Soldier, side: pieces::Side::Defender} => FIGURES.white_soldier,
+                    Piece {piece_type: PieceType::Soldier, side: pieces::Side::Attacker} => FIGURES.black_soldier,
                     _ => panic!("Unexpected piece type")
                 })
             } else if let Some(play_record) = &self.last_play {
                 if play_record.outcome.captures.iter().any(|p| p.tile == tile) {
-                    Some(IMAGES.captured_tile)
+                    Some(FIGURES.captured_tile)
                 } else if play_record.play.from == tile {
                     Some(if play_record.play.movement.axis == Axis::Vertical {
                         if play_record.play.movement.displacement > 0 {
-                            IMAGES.down_arrow
+                            FIGURES.down_arrow
                         } else {
-                            IMAGES.up_arrow
+                            FIGURES.up_arrow
                         }
                     } else {
                         if play_record.play.movement.displacement > 0 {
-                            IMAGES.right_arrow
+                            FIGURES.right_arrow
                         } else {
-                            IMAGES.left_arrow
+                            FIGURES.left_arrow
                         }
                     })
                 } else {
@@ -193,15 +193,29 @@ impl Board {
             } else {
                 None
             };
-            if let Some(img) = img {
-                egui::Image::new(img)
-                    .rounding(5.0)
-                    .tint(Color32::LIGHT_BLUE)
-                    .paint_at(ui, rect);
-
+            if let Some(fig) = fig_opt {
+                painter.text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    fig,
+                    FontId::proportional(TILE_LENGTH * 0.9),
+                    Color32::BLACK,
+                );
+                // let img = Image::from(img_src)
+                //     .rounding(5.0)
+                //     .tint(Color32::LIGHT_BLUE);
+                // img.paint_at(ui, rect);
             }
         }
 
+        if game.state.side_to_play == self.human_side.other() {
+            // If it's the AI's turn, we need to constantly repaint as egui won't automatically
+            // detect when the AI thread has returned a play.  On native, this could be called from
+            // the AI thread only when it has selected a play, but this doesn't work on web as only
+            // the main thread has access to the UI.
+            ctx.request_repaint();
+        }
+        
         if let (Some(from), Some(to)) = self.selected_tiles {
             // Human has made a play
             self.selected_tiles = (None, None);

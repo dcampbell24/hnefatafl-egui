@@ -1,5 +1,5 @@
 [package]
-name = "tafl-egui"
+name = "hnefatafl-egui"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,4 +8,20 @@ hnefatafl = { path = "../hnefatafl" }
 rand = {  version = "0.8.5", features = ["small_rng"] }
 egui = "0.30.0"
 eframe = "0.30.0"
-egui_extras = {  version = "0.30.0", features = ["file", "svg"] }
+egui_extras = {  version = "0.30.0", features = ["file"] }
+log = "0.4.22"
+egui_commonmark = "0.19.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+tracing-wasm = "0.2"
+wasm-bindgen = "0.2.99"
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3.76"
+getrandom = { version = "0.2", features = ["js"] }
+wasm_thread = "0.3.3"
+proxy-wasm = "0.2.2"
+web-time = "1.1.0"
+
+[lib]
+crate-type = ["cdylib"]

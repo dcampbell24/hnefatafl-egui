@@ -7,6 +7,7 @@ use hnefatafl::preset::{boards, rules};
 
 pub(crate) enum GameSetupAction {
     StartGame(GameSetup),
+    ViewAbout,
     Quit
 }
 
@@ -31,10 +32,10 @@ impl GameSetupView {
         side_keys.sort();
         let selected_ai_side = side_keys.first().expect("No sides provided.").clone();
 
-        Self { variants, ai_sides, ai_time: 1, selected_variant, selected_ai_side }
+        Self { variants, ai_sides, ai_time: 5, selected_variant, selected_ai_side }
     }
 
-    pub(crate) fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<GameSetupAction> {
+    pub(crate) fn update(&mut self, ctx: &egui::Context) -> Option<GameSetupAction> {
         let mut action: Option<GameSetupAction> = None;
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::Grid::new("game_setup_grid").show(ui, |ui| {
@@ -42,7 +43,7 @@ impl GameSetupView {
                 egui::ComboBox::from_id_salt("variant")
                     .selected_text(&self.selected_variant)
                     .show_ui(ui, |combo_box| {
-                        for (k, v) in &self.variants {
+                        for (k, _) in &self.variants {
                             combo_box.selectable_value(&mut self.selected_variant, k.clone(), k.as_str());
                         }
                     });
@@ -60,14 +61,20 @@ impl GameSetupView {
                 ui.add(egui::Slider::new(&mut self.ai_time, 1..=60));
                 ui.end_row();
                 if ui.button("Start game").clicked() {
-                    let (ruleset, starting_board) = self.variants[&self.selected_variant].clone();
+                    let ruleset_name = self.selected_variant.clone();
+                    let (ruleset, starting_board) = self.variants[&ruleset_name].clone();
                     action = Some(GameSetupAction::StartGame(GameSetup {
                             ruleset,
+                            ruleset_name,
                             starting_board,
                             ai_side: self.ai_sides[&self.selected_ai_side],
                             ai_time: Duration::from_secs(self.ai_time as u64),
                     }));
                 }
+                if ui.button("About").clicked() {
+                    action = Some(GameSetupAction::ViewAbout)
+                }
+                #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("Quit").clicked() {
                     action = Some(GameSetupAction::Quit);
                 }

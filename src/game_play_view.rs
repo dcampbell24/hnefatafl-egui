@@ -5,17 +5,26 @@ use egui::Layout;
 use hnefatafl::board::state::BoardState;
 use hnefatafl::game::state::GameState;
 use hnefatafl::game::Game;
+use hnefatafl::game::GameOutcome::{Draw, Win};
+use hnefatafl::game::GameStatus::Over;
 use hnefatafl::pieces;
-use hnefatafl::pieces::Side::Defender;
 use hnefatafl::play::{Play, PlayRecord};
 use hnefatafl::rules::Ruleset;
-use std::thread;
-use std::thread::JoinHandle;
 use std::time::Duration;
+#[cfg(not(target_arch = "wasm32"))]
+use std::{
+    thread,
+    thread::JoinHandle
+};
+#[cfg(target_arch = "wasm32")]
+use wasm_thread::{
+    self as thread,
+    JoinHandle
+};
 
 enum Message<T: BoardState> {
-    Request(GameState<T>, egui::Context),
-    Response(Play, GameState<T>)
+    Request(GameState<T>),
+    Response(Play, GameState<T>, Vec<String>)
 }
 
 pub(crate) enum GamePlayAction {
@@ -26,6 +35,7 @@ pub(crate) enum GamePlayAction {
 
 pub(crate) struct GameSetup {
     pub(crate) ruleset: Ruleset,
+    pub(crate) ruleset_name: String,
     pub(crate) starting_board: String,
     pub(crate) ai_side: pieces::Side,
     pub(crate) ai_time: Duration
@@ -43,7 +53,7 @@ pub(crate) struct GamePlayView<T: BoardState> {
 }
 
 impl<T: BoardState + Send + 'static> GamePlayView<T> {
-    pub(crate) fn new(egui_ctx: &egui::Context, setup: GameSetup) -> Self {
+    pub(crate) fn new(setup: GameSetup) -> Self {
         let game: Game<T> = Game::new(setup.ruleset, &setup.starting_board).unwrap();
         let board = Board::new(&game, setup.ai_side.other());
         let (g2ai_tx, g2ai_rx) = std::sync::mpsc::channel::<Message<T>>();
@@ -51,11 +61,11 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
         let ai_thread = thread::spawn(move || {
             let mut ai = BasicAi::new(game.logic, setup.ai_side, setup.ai_time);
             loop {
-                if let Ok(Message::Request(state, ctx)) = g2ai_rx.recv() {
-                    if let Ok(play) = ai.next_play(&state) {
-                        ai2g_tx.send(Message::Response(play, state))
+                if let Ok(Message::Request(state)) = g2ai_rx.recv() {
+                    if let Ok((play, lines)) = ai.next_play(&state) {
+                        ai2g_tx.send(Message::Response(play, state, lines))
                             .expect("Failed to send response");
-                        ctx.request_repaint()
+                        //ctx.request_repaint()
                     }
                 } else {
                     break
@@ -63,23 +73,33 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
             }
         });
         if setup.ai_side == setup.ruleset.starting_side {
-            g2ai_tx.send(Message::Request(game.state, egui_ctx.clone())).expect("Failed to send request");
+            g2ai_tx.send(Message::Request(game.state)).expect("Failed to send request");
         }
+        let log_lines = vec![
+            format!(
+                "Game is {:?}. AI plays as {:?}, human plays as {:?}. {:?} to play first.",
+                setup.ruleset_name,
+                setup.ai_side,
+                setup.ai_side.other(),
+                setup.ruleset.starting_side
+            )
+        ];
         Self {
             game,
             board_ui: board,
             last_play: None,
-            ai_side: Defender,
+            ai_side: setup.ai_side,
             ai_thread,
             ai_sender: g2ai_tx,
             ai_receiver: ai2g_rx,
-            log_lines: vec![]
+            log_lines
 
         }
     }
 
     fn handle_play(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
-        if let Ok(Message::Response(ai_play, state)) = self.ai_receiver.try_recv() {
+        if let Ok(Message::Response(ai_play, state, mut lines)) = self.ai_receiver.try_recv() {
+            self.log_lines.append(&mut lines);
             if state == self.game.state {
                 self.game.do_play(ai_play).unwrap();
                 self.log_lines.push(format!("{:?} played {}", self.ai_side, ai_play));
@@ -88,12 +108,23 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
         if let Some(human_play) = self.board_ui.update(&self.game, ctx, ui) {
             self.game.do_play(human_play).unwrap();
             self.log_lines.push(format!("{:?} played {}", self.ai_side.other(), human_play));
-            self.ai_sender.send(Message::Request(self.game.state, ctx.clone()))
+            self.ai_sender.send(Message::Request(self.game.state))
                 .expect("Failed to send request");
+        }
+        if let Over(outcome) = self.game.state.status {
+            let over_msg = match outcome {
+                Win(reason, side) =>
+                    format!("{side:?} has won ({reason:?})."),
+                Draw(reason) =>
+                    format!("Draw ({reason:?}).")
+            };
+            if self.log_lines.last().is_some_and(|m| m != over_msg.as_str()) {
+                self.log_lines.push(over_msg);
+            }
         }
     }
     
-    pub(crate) fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) -> Option<GamePlayAction> {
+    pub(crate) fn update(&mut self, ctx: &egui::Context) -> Option<GamePlayAction> {
         let mut action: Option<GamePlayAction> = None;
         egui::TopBottomPanel::bottom("log_pane").show(ctx, |ui| {
             ui.vertical(|ui| {
@@ -104,6 +135,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
                     if ui.button("Quit game").clicked() {
                         action = Some(GamePlayAction::QuitGame)
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
                     if ui.button("Quit app").clicked() {
                         action = Some(GamePlayAction::QuitApp)
                     }
@@ -120,7 +152,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
         });
         if let Some(GamePlayAction::UndoPlay) = action {
             self.game.undo_last_play();
-            self.ai_sender.send(Message::Request(self.game.state, ctx.clone()))
+            self.ai_sender.send(Message::Request(self.game.state))
                 .expect("Failed to send request");
 
         }
