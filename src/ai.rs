@@ -1,6 +1,5 @@
 use crate::ai::AiError::{NoPlayAvailable, NotMyTurn};
 use hnefatafl::board::state::BoardState;
-use hnefatafl::error::BoardError;
 use hnefatafl::game::logic::GameLogic;
 use hnefatafl::game::state::GameState;
 use hnefatafl::game::GameOutcome::{Draw, Win};
@@ -10,10 +9,9 @@ use hnefatafl::pieces::PieceType::{King, Soldier};
 use hnefatafl::pieces::Side::{Attacker, Defender};
 use hnefatafl::pieces::{Piece, Side, KING};
 use hnefatafl::play::Play;
-use rand::rngs::ThreadRng;
-use rand::{thread_rng, Rng, RngCore};
+use hnefatafl::tiles::Coords;
+use rand::{thread_rng, Rng};
 use std::cmp::min;
-use std::thread::sleep;
 use std::time::Duration;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -33,7 +31,6 @@ pub(crate) struct SearchStats {
 }
 
 pub(crate) enum AiError {
-    BoardError(BoardError),
     NoPlayAvailable,
     NotMyTurn
 }
@@ -87,13 +84,6 @@ enum NodeType {
     LowerBound,
     UpperBound,
     Exact
-}
-
-#[derive(Debug)]
-struct Node {
-    depth: u8,
-    score: i32,
-    node_type: NodeType
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -184,51 +174,11 @@ impl TranspositionTable {
             }
         })
     }
-    
-    fn clear(&mut self) {
-        self.entries.fill(None);
-        self.current_age = 0;
-    }
 
-    fn usage(&self) -> f64 {
-        let used = self.entries.iter().filter(|e| e.is_some()).count();
-        used as f64 / self.size as f64
-    }
-}
-
-impl From<BoardError> for AiError {
-    fn from(err: BoardError) -> AiError {
-        AiError::BoardError(err)
-    }
 }
 
 pub trait Ai {
     fn next_play<T: BoardState>(&mut self, game_state: &GameState<T>) -> Result<(Play, Vec<String>), AiError>;
-}
-
-pub struct RandomAi {
-    side: Side,
-    logic: GameLogic,
-    rng: ThreadRng
-}
-
-impl RandomAi {
-    pub(crate) fn new(logic: GameLogic, side: Side) -> Self {
-        Self { side, logic, rng: thread_rng() }
-    }
-}
-
-impl Ai for RandomAi {
-    fn next_play<T: BoardState>(&mut self, game_state: &GameState<T>) -> Result<(Play, Vec<String>), AiError> {
-        let mut plays: Vec<Play> = vec![];
-        for t in game_state.board.iter_occupied(self.side) {
-            for p in self.logic.iter_plays(t, game_state)? {
-                plays.push(p)
-            }
-        }
-        sleep(Duration::from_millis(500));
-        Ok((plays[self.rng.next_u32() as usize % plays.len()], vec![]))
-    }
 }
 
 pub struct BasicAi {
@@ -236,7 +186,6 @@ pub struct BasicAi {
     logic: GameLogic,
     zt: ZobristTable,
     tt: TranspositionTable,
-    rng: ThreadRng,
     time_to_play: Duration
 }
 
@@ -253,7 +202,6 @@ impl BasicAi {
             tt: TranspositionTable::new(128),
             #[cfg(not(target_arch = "wasm32"))]
             tt: TranspositionTable::new(512),
-            rng,
             time_to_play
         }
     }
@@ -261,6 +209,9 @@ impl BasicAi {
     /// Evaluate board state and return a score. Higher = better for attacker, lower = better for
     /// defender.
     fn eval_board<T: BoardState>(&self, board: &T) -> i32 {
+        let king_tile = board.get_king();
+        let king_coords = Coords::from(king_tile);
+
         let mut score = 0i32;
         let att_count = board.count_pieces(Attacker) as i32;
         let def_count = board.count_pieces(Defender) as i32;
@@ -274,16 +225,25 @@ impl BasicAi {
 
         // King closer to edge = better for defender
         let side_len = self.logic.board_geo.side_len;
-        let king_pos = board.get_king();
-        let col_dist = min(king_pos.col, side_len - king_pos.col - 1);
-        let row_dist = min(king_pos.row, side_len - king_pos.row - 1);
+        let col_dist = min(king_tile.col, side_len - king_tile.col - 1);
+        let row_dist = min(king_tile.row, side_len - king_tile.row - 1);
         score += (col_dist * 5) as i32;
         score += (row_dist * 5) as i32;
 
         // Fewer hostile pieces near king = better for defender
-        score += (self.logic.board_geo.neighbors(king_pos).iter()
+        score += (self.logic.board_geo.neighbors(king_tile).iter()
             .filter(|n| self.logic.tile_hostile(**n, Piece::new(King, Defender), board))
             .count() * 10) as i32;
+
+        // Attacker pieces closer to king = better for attacker
+        let mut total_dist = 0u32;
+        let mut attacker_count = 0u32;
+        for tile in board.iter_occupied(Attacker) {
+            total_dist += Coords::from(tile).row_col_offset_from(king_coords)
+                .manhattan_dist() as u32;
+            attacker_count += 1;
+        }
+        score -= ((total_dist / attacker_count) as i32) * 10;
         
         score
     }
@@ -381,7 +341,7 @@ impl BasicAi {
         stats: &mut SearchStats
     ) -> (i32, Option<Play>) {
         stats.states += 1;
-        let state = self.logic.do_play(play, starting_state).expect("Invalid play").0;
+        let state = self.logic.do_valid_play(play, starting_state).new_state;
         let hash = self.zt.hash(state.board, state.side_to_play);
         
         if let Some(tt_entry) = self.tt.probe(hash) {
@@ -472,7 +432,7 @@ impl BasicAi {
         let mut plays: Vec<(Play, GameState<T>)> = Vec::new();
         for t in state.board.iter_occupied(state.side_to_play) {
             for p in self.logic.iter_plays(t, &state).expect("Could not iterate plays") {
-                let next_state = self.logic.do_play(p, state).expect("Invalid play").0;
+                let next_state = self.logic.do_valid_play(p, state).new_state;
                 plays.push((p, next_state));
             }
         }
@@ -527,7 +487,11 @@ impl BasicAi {
                 }
             } 
             if out_of_time || play.is_none() {
-                stats.max_depth = depth;
+                if out_of_time {
+                    stats.max_depth = depth - 1;
+                } else {
+                    stats.max_depth = depth;
+                }
                 return (best_play, best_score);
             }
             depth += 1

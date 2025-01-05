@@ -3,6 +3,7 @@ use crate::game_setup_view::{GameSetupAction, GameSetupView};
 use eframe::{App, CreationContext, Frame};
 use hnefatafl::board::state::LargeBasicBoardState;
 use std::process::exit;
+use egui::RichText;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 
 enum View {
@@ -24,6 +25,9 @@ impl MyApp {
 
     fn about_view(&self, ctx: &egui::Context) -> bool {
         let mut back = false;
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.label(RichText::new("About this demo").heading()  );
+        });
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut cm_cache = CommonMarkCache::default();
             CommonMarkViewer::new().show(
