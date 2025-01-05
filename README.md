@@ -1,6 +1,7 @@
 This is a basic Hnefatafl app designed to demonstrate what you can build with the
 [`hnefatafl-rs`](https://crates.io/crates/hnefatafl) crate in Rust. You can play a few different variants against a basic (not very strong) AI.
-It uses the [`egui`](https://crates.io/crates/egui) GUI library and can be built as a native or web app.
+It uses the [`egui`](https://crates.io/crates/egui) GUI library and can be built as a native or web app. You can see the web version at
+https://bunburya.eu/hnefatafl-egui/
 
 # Building
 
