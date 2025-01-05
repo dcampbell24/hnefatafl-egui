@@ -3,6 +3,7 @@ use hnefatafl::pieces;
 use hnefatafl::rules::Ruleset;
 use std::collections::HashMap;
 use std::time::Duration;
+use egui::RichText;
 use hnefatafl::preset::{boards, rules};
 
 pub(crate) enum GameSetupAction {
@@ -37,6 +38,9 @@ impl GameSetupView {
 
     pub(crate) fn update(&mut self, ctx: &egui::Context) -> Option<GameSetupAction> {
         let mut action: Option<GameSetupAction> = None;
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            ui.label(RichText::new("Set up new game").heading());
+        });
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::Grid::new("game_setup_grid").show(ui, |ui| {
                 ui.label("Variant:");

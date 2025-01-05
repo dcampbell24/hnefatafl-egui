@@ -8,8 +8,6 @@ use hnefatafl::play::{Play, PlayRecord};
 use hnefatafl::tiles::{Axis, Tile};
 use std::collections::{HashMap, HashSet};
 
-const TILE_LENGTH: f32 = 32.0;
-
 struct TileColors {
     throne: Color32,
     corner: Color32,
@@ -75,11 +73,18 @@ impl TileState {
 
 
 pub(crate) struct Board {
+    /// The state of each tile.
     tile_state: HashMap<Tile, TileState>,
+    /// Tiles that have been selected by the user.
     selected_tiles: (Option<Tile>, Option<Tile>),
+    /// Possible destinations of the currently selected piece.
     possible_dests: HashSet<Tile>,
+    /// The last play that was made.
     last_play: Option<PlayRecord>,
-    human_side: pieces::Side
+    /// The side that the human is playing as.
+    human_side: pieces::Side,
+    /// The length of the board in tiles.
+    board_len_tiles: u8
 }
 
 impl Board {
@@ -99,7 +104,8 @@ impl Board {
             selected_tiles: (None, None),
             possible_dests: HashSet::new(),
             last_play: None,
-            human_side
+            human_side,
+            board_len_tiles: game.logic.board_geo.side_len
         }
     }
     fn update_tile_state<T: BoardState>(&mut self, board_state: T) {
@@ -107,14 +113,26 @@ impl Board {
             state.piece = board_state.get_piece(*tile);
         }
     }
+    
+    fn calc_tile_side_px(&self, board_side_px: f32) -> f32 {
+        (board_side_px - self.board_len_tiles as f32) / (self.board_len_tiles as f32)
+    }
 
-    pub(crate) fn update<T: BoardState>(&mut self, game: &Game<T>, ctx: &egui::Context, ui: &mut egui::Ui) -> Option<Play> {
+    pub(crate) fn update<T: BoardState>(
+        &mut self,
+        game: &Game<T>,
+        ctx: &egui::Context, ui:
+        &mut egui::Ui,
+        board_side_px: f32
+    ) -> Option<Play> {
         if let Some(last_play) = game.play_history.last() {
             self.last_play = Some(last_play.clone());
         }
         self.update_tile_state(game.state.board);
+        
+        let tile_len_px = self.calc_tile_side_px(board_side_px);
 
-        let tile_size = Vec2::new(TILE_LENGTH, TILE_LENGTH);
+        let tile_size_px = Vec2::new(tile_len_px, tile_len_px);
         let mut responses: Vec<(Response, Rect, Color32, Tile)> = vec![];
         for (tile, state) in &self.tile_state {
             let color = if self.possible_dests.contains(&tile) {
@@ -133,10 +151,10 @@ impl Board {
                 TILE_COLORS.plain
             };
             let top_left = egui::pos2(
-                (TILE_LENGTH + 1.0) * tile.col as f32,
-                (TILE_LENGTH + 1.0) * tile.row as f32
+                (tile_len_px + 1.0) * tile.col as f32,
+                (tile_len_px + 1.0) * tile.row as f32
             );
-            let bottom_right = top_left + tile_size;
+            let bottom_right = top_left + tile_size_px;
             let rect = egui::Rect::from_two_pos(top_left, bottom_right);
             let response = ui.allocate_rect(rect, egui::Sense::click());
             responses.push((response, rect, color, *tile));
@@ -171,7 +189,7 @@ impl Board {
                     _ => panic!("Unexpected piece type")
                 })
             } else if let Some(play_record) = &self.last_play {
-                if play_record.outcome.captures.iter().any(|p| p.tile == tile) {
+                if play_record.effects.captures.iter().any(|p| p.tile == tile) {
                     Some(FIGURES.captured_tile)
                 } else if play_record.play.from == tile {
                     Some(if play_record.play.movement.axis == Axis::Vertical {
@@ -198,7 +216,7 @@ impl Board {
                     rect.center(),
                     Align2::CENTER_CENTER,
                     fig,
-                    FontId::proportional(TILE_LENGTH * 0.9),
+                    FontId::proportional(tile_len_px * 0.9),
                     Color32::BLACK,
                 );
                 // let img = Image::from(img_src)
