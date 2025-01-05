@@ -56,8 +56,9 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
             loop {
                 if let Ok(Message::Request(state)) = g2ai_rx.recv() {
                     if let Ok((play, lines)) = ai.next_play(&state) {
-                        ai2g_tx.send(Message::Response(play, state, lines))
-                            .expect("Failed to send response");
+                        // Don't panic if we can't send the response, it probably just means that
+                        // the user has quit the game
+                        let _ = ai2g_tx.send(Message::Response(play, state, lines));
                         //ctx.request_repaint()
                     }
                 } else {
@@ -66,7 +67,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
             }
         });
         if setup.ai_side == setup.ruleset.starting_side {
-            g2ai_tx.send(Message::Request(game.state)).expect("Failed to send request");
+            let _ = g2ai_tx.send(Message::Request(game.state));
         }
         let log_lines = vec![
             format!(
