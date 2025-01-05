@@ -41,8 +41,11 @@ Then generate the WASM bindings (placing them in the `srv/pkg/` directory) with:
 wasm-bindgen --target web --out-dir srv/pkg target/wasm32-unknown-unknown/release/hnefatafl_egui.wasm
 ```
 
-And then serve the files in the `srv/` directory using the server of your choice. You must send the
-`Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers in your response.
-There is a very basic Python server included in the `scripts/` directory that does just that 
-(`cd srv; python3 ../scripts/serve.py`). This can be useful for testing purposes, **but it should not be used in
-production**.
+And then serve the files in the `srv/` directory using the web server of your choice. You must send the
+`Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers in your response. 
+There is a very basic Python server included in the `scripts/` directory that does just that. You can run it like so:
+```shell
+cd srv
+python3 ../scripts/serve.py
+```
+This can be useful for testing purposes, **but it should not be used in production**.
