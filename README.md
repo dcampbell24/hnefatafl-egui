@@ -1,6 +1,6 @@
 This is a basic Hnefatafl app designed to demonstrate what you can build with the
-[`hnefatafl-rs`](https://crates.io/crates/hnefatafl) crate in Rust. You can play a few different variants against a
-basic AI. It uses the [`egui`](https://crates.io/crates/egui) GUI library and can be built as a native or web app.
+[`hnefatafl-rs`](https://crates.io/crates/hnefatafl) crate in Rust. You can play a few different variants against a basic (not very strong) AI.
+It uses the [`egui`](https://crates.io/crates/egui) GUI library and can be built as a native or web app.
 
 # Building
 
@@ -49,3 +49,9 @@ cd srv
 python3 ../scripts/serve.py
 ```
 This can be useful for testing purposes, **but it should not be used in production**.
+
+# Contributing
+
+This app is really just intended as a basic demo so I will likely not be putting much further effort into enhancing it
+(unless I want to use it to showcase additional `hnefatafl-rs` capabilities in the future). If you encounter any major
+problems, feel free to create an issue. Pull requests to fix issues or enhance the AI or UI are also welcome.
