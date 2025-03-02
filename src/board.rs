@@ -66,7 +66,7 @@ impl TileState {
     }
 }
 
-pub(crate) struct Board {
+pub struct Board {
     /// The state of each tile.
     tile_state: HashMap<Tile, TileState>,
     /// Tiles that have been selected by the user.
@@ -82,7 +82,7 @@ pub(crate) struct Board {
 }
 
 impl Board {
-    pub(crate) fn new<T: BoardState>(game: &Game<T>, human_side: pieces::Side) -> Self {
+    pub fn new<T: BoardState>(game: &Game<T>, human_side: pieces::Side) -> Self {
         let mut tile_state: HashMap<Tile, TileState> = HashMap::new();
         for tile in game.logic.board_geo.iter_tiles() {
             tile_state.insert(
