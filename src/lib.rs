@@ -1,7 +1,7 @@
 #![cfg(target_arch = "wasm32")]
 
-mod ai;
-mod board;
+pub mod ai;
+pub mod board;
 mod game_play_view;
 mod game_setup_view;
 mod app;
