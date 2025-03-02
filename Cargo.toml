@@ -24,4 +24,4 @@ proxy-wasm = "0.2.2"
 web-time = "1.1.0"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
