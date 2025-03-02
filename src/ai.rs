@@ -206,7 +206,7 @@ pub struct BasicAi {
 }
 
 impl BasicAi {
-    pub(crate) fn new(logic: GameLogic, side: Side, time_to_play: Duration) -> Self {
+    pub fn new(logic: GameLogic, side: Side, time_to_play: Duration) -> Self {
         let mut rng = thread_rng();
         Self {
             side,
