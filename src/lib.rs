@@ -1,20 +1,23 @@
-#![cfg(target_arch = "wasm32")]
-
 pub mod ai;
 pub mod board;
 mod game_play_view;
 mod game_setup_view;
 mod app;
 
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
 use crate::app::MyApp;
 
 #[derive(Clone)]
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub struct WebHandle {
     runner: eframe::WebRunner,
 }
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 impl WebHandle {
     /// Installs a panic hook, then returns.
