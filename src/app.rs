@@ -1,15 +1,15 @@
 use crate::game_play_view::{GamePlayAction, GamePlayView};
 use crate::game_setup_view::{GameSetupAction, GameSetupView};
 use eframe::{App, CreationContext, Frame};
-use hnefatafl::board::state::LargeBasicBoardState;
-use std::process::exit;
 use egui::RichText;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+use hnefatafl::board::state::LargeBasicBoardState;
+use std::process::exit;
 
 enum View {
     GameSetup(GameSetupView),
     GamePlay(GamePlayView<LargeBasicBoardState>),
-    About
+    About,
 }
 
 pub(crate) struct MyApp {
@@ -19,20 +19,20 @@ pub(crate) struct MyApp {
 impl MyApp {
     pub(crate) fn new(cc: &CreationContext) -> Self {
         Self {
-            current_view: View::GameSetup(GameSetupView::default())
+            current_view: View::GameSetup(GameSetupView::default()),
         }
     }
 
     fn about_view(&self, ctx: &egui::Context) -> bool {
         let mut back = false;
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.label(RichText::new("About this demo").heading()  );
+            ui.label(RichText::new("About this demo").heading());
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut cm_cache = CommonMarkCache::default();
             CommonMarkViewer::new().show(
                 ui,
-                &mut cm_cache, 
+                &mut cm_cache,
                 "This is a basic Hnefatafl app designed to demonstrate what you can build with \
                 the `hnefatafl-rs` crate in Rust. You can play a few different variants against a \
                 basic AI. It uses the `egui` GUI library and can be built as a native or web app.\n\n\
@@ -47,30 +47,32 @@ impl MyApp {
         });
         back
     }
-
 }
 
 impl App for MyApp {
-    
     fn update(&mut self, ctx: &egui::Context, frame: &mut Frame) {
         let new_view = match self.current_view {
             View::GameSetup(ref mut game_setup_view) => {
                 // Game setup screen
                 match game_setup_view.update(ctx) {
-                    Some(GameSetupAction::StartGame(gs)) => Some(View::GamePlay(GamePlayView::new(gs))),
+                    Some(GameSetupAction::StartGame(gs)) => {
+                        Some(View::GamePlay(GamePlayView::new(gs)))
+                    }
                     Some(GameSetupAction::ViewAbout) => Some(View::About),
                     Some(GameSetupAction::Quit) => exit(0),
                     None => None,
                 }
-            },
+            }
             View::GamePlay(ref mut game_play_view) => {
                 // Game play screen
                 match game_play_view.update(ctx) {
-                    Some(GamePlayAction::QuitGame) => Some(View::GameSetup(GameSetupView::default())),
+                    Some(GamePlayAction::QuitGame) => {
+                        Some(View::GameSetup(GameSetupView::default()))
+                    }
                     Some(GamePlayAction::QuitApp) => exit(0),
-                    _ => None
+                    _ => None,
                 }
-            },
+            }
             View::About => {
                 if self.about_view(ctx) {
                     Some(View::GameSetup(GameSetupView::default()))

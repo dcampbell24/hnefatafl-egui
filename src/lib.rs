@@ -1,8 +1,8 @@
 pub mod ai;
+mod app;
 pub mod board;
 mod game_play_view;
 mod game_setup_view;
-mod app;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -34,12 +34,15 @@ impl WebHandle {
 
     /// Call this once from JavaScript to start your app.
     #[wasm_bindgen]
-    pub async fn start(&self, canvas: web_sys::HtmlCanvasElement) -> Result<(), wasm_bindgen::JsValue> {
+    pub async fn start(
+        &self,
+        canvas: web_sys::HtmlCanvasElement,
+    ) -> Result<(), wasm_bindgen::JsValue> {
         self.runner
             .start(
                 canvas,
                 eframe::WebOptions::default(),
-                Box::new(|cc| Ok(Box::new(MyApp::new(cc))), )
+                Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
             )
             .await
     }

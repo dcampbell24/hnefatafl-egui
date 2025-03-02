@@ -1,15 +1,15 @@
 use crate::game_play_view::GameSetup;
+use egui::RichText;
 use hnefatafl::pieces;
+use hnefatafl::preset::{boards, rules};
 use hnefatafl::rules::Ruleset;
 use std::collections::HashMap;
 use std::time::Duration;
-use egui::RichText;
-use hnefatafl::preset::{boards, rules};
 
 pub(crate) enum GameSetupAction {
     StartGame(GameSetup),
     ViewAbout,
-    Quit
+    Quit,
 }
 
 pub(crate) struct GameSetupView {
@@ -21,7 +21,6 @@ pub(crate) struct GameSetupView {
 }
 
 impl GameSetupView {
-
     pub(crate) fn new(
         variants: HashMap<String, (Ruleset, String)>,
         ai_sides: HashMap<String, pieces::Side>,
@@ -33,7 +32,13 @@ impl GameSetupView {
         side_keys.sort();
         let selected_ai_side = side_keys.first().expect("No sides provided.").clone();
 
-        Self { variants, ai_sides, ai_time: 5, selected_variant, selected_ai_side }
+        Self {
+            variants,
+            ai_sides,
+            ai_time: 5,
+            selected_variant,
+            selected_ai_side,
+        }
     }
 
     pub(crate) fn update(&mut self, ctx: &egui::Context) -> Option<GameSetupAction> {
@@ -48,7 +53,11 @@ impl GameSetupView {
                     .selected_text(&self.selected_variant)
                     .show_ui(ui, |combo_box| {
                         for (k, _) in &self.variants {
-                            combo_box.selectable_value(&mut self.selected_variant, k.clone(), k.as_str());
+                            combo_box.selectable_value(
+                                &mut self.selected_variant,
+                                k.clone(),
+                                k.as_str(),
+                            );
                         }
                     });
                 ui.end_row();
@@ -57,7 +66,11 @@ impl GameSetupView {
                     .selected_text(&self.selected_ai_side)
                     .show_ui(ui, |combo_box| {
                         for (k, _) in &self.ai_sides {
-                            combo_box.selectable_value(&mut self.selected_ai_side, k.clone(), k.as_str());
+                            combo_box.selectable_value(
+                                &mut self.selected_ai_side,
+                                k.clone(),
+                                k.as_str(),
+                            );
                         }
                     });
                 ui.end_row();
@@ -68,11 +81,11 @@ impl GameSetupView {
                     let ruleset_name = self.selected_variant.clone();
                     let (ruleset, starting_board) = self.variants[&ruleset_name].clone();
                     action = Some(GameSetupAction::StartGame(GameSetup {
-                            ruleset,
-                            ruleset_name,
-                            starting_board,
-                            ai_side: self.ai_sides[&self.selected_ai_side],
-                            ai_time: Duration::from_secs(self.ai_time as u64),
+                        ruleset,
+                        ruleset_name,
+                        starting_board,
+                        ai_side: self.ai_sides[&self.selected_ai_side],
+                        ai_time: Duration::from_secs(self.ai_time as u64),
                     }));
                 }
                 if ui.button("About").clicked() {
@@ -86,15 +99,23 @@ impl GameSetupView {
         });
         action
     }
-
 }
 
 impl Default for GameSetupView {
     fn default() -> Self {
         let mut variants: HashMap<String, (Ruleset, String)> = HashMap::default();
-        variants.insert("Copenhagen".to_string(), (rules::COPENHAGEN, boards::COPENHAGEN.to_string()));
-        variants.insert("Brandubh".to_string(), (rules::BRANDUBH, boards::BRANDUBH.to_string()));
-        variants.insert("Tablut".to_string(), (rules::TABLUT, boards::TABLUT.to_string()));
+        variants.insert(
+            "Copenhagen".to_string(),
+            (rules::COPENHAGEN, boards::COPENHAGEN.to_string()),
+        );
+        variants.insert(
+            "Brandubh".to_string(),
+            (rules::BRANDUBH, boards::BRANDUBH.to_string()),
+        );
+        variants.insert(
+            "Tablut".to_string(),
+            (rules::TABLUT, boards::TABLUT.to_string()),
+        );
 
         let mut sides: HashMap<String, pieces::Side> = HashMap::default();
         sides.insert("Attacker".to_string(), pieces::Side::Attacker);

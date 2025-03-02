@@ -11,21 +11,21 @@ use hnefatafl::pieces;
 use hnefatafl::play::Play;
 use hnefatafl::rules::Ruleset;
 use std::cmp::min;
-use std::time::Duration;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
+use std::time::Duration;
 #[cfg(target_arch = "wasm32")]
 use wasm_thread as thread;
 
 enum Message<T: BoardState> {
     Request(GameState<T>),
-    Response(Play, GameState<T>, Vec<String>)
+    Response(Play, GameState<T>, Vec<String>),
 }
 
 pub(crate) enum GamePlayAction {
     UndoPlay,
     QuitGame,
-    QuitApp
+    QuitApp,
 }
 
 pub(crate) struct GameSetup {
@@ -33,7 +33,7 @@ pub(crate) struct GameSetup {
     pub(crate) ruleset_name: String,
     pub(crate) starting_board: String,
     pub(crate) ai_side: pieces::Side,
-    pub(crate) ai_time: Duration
+    pub(crate) ai_time: Duration,
 }
 
 pub(crate) struct GamePlayView<T: BoardState> {
@@ -42,7 +42,7 @@ pub(crate) struct GamePlayView<T: BoardState> {
     ai_side: pieces::Side,
     ai_sender: std::sync::mpsc::Sender<Message<T>>,
     ai_receiver: std::sync::mpsc::Receiver<Message<T>>,
-    log_lines: Vec<String>
+    log_lines: Vec<String>,
 }
 
 impl<T: BoardState + Send + 'static> GamePlayView<T> {
@@ -62,30 +62,27 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
                         //ctx.request_repaint()
                     }
                 } else {
-                    break
+                    break;
                 }
             }
         });
         if setup.ai_side == setup.ruleset.starting_side {
             let _ = g2ai_tx.send(Message::Request(game.state));
         }
-        let log_lines = vec![
-            format!(
-                "Game is {:?}. AI plays as {:?}, human plays as {:?}. {:?} to play first.",
-                setup.ruleset_name,
-                setup.ai_side,
-                setup.ai_side.other(),
-                setup.ruleset.starting_side
-            )
-        ];
+        let log_lines = vec![format!(
+            "Game is {:?}. AI plays as {:?}, human plays as {:?}. {:?} to play first.",
+            setup.ruleset_name,
+            setup.ai_side,
+            setup.ai_side.other(),
+            setup.ruleset.starting_side
+        )];
         Self {
             game,
             board_ui: board,
             ai_side: setup.ai_side,
             ai_sender: g2ai_tx,
             ai_receiver: ai2g_rx,
-            log_lines
-
+            log_lines,
         }
     }
 
@@ -94,28 +91,33 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
             self.log_lines.append(&mut lines);
             if state == self.game.state {
                 self.game.do_play(ai_play).unwrap();
-                self.log_lines.push(format!("{:?} played {}", self.ai_side, ai_play));
+                self.log_lines
+                    .push(format!("{:?} played {}", self.ai_side, ai_play));
             }
         }
         if let Some(human_play) = self.board_ui.update(&self.game, ctx, ui, board_side_px) {
             self.game.do_play(human_play).unwrap();
-            self.log_lines.push(format!("{:?} played {}", self.ai_side.other(), human_play));
-            self.ai_sender.send(Message::Request(self.game.state))
+            self.log_lines
+                .push(format!("{:?} played {}", self.ai_side.other(), human_play));
+            self.ai_sender
+                .send(Message::Request(self.game.state))
                 .expect("Failed to send request");
         }
         if let Over(outcome) = self.game.state.status {
             let over_msg = match outcome {
-                Win(reason, side) =>
-                    format!("{side:?} has won ({reason:?})."),
-                Draw(reason) =>
-                    format!("Draw ({reason:?}).")
+                Win(reason, side) => format!("{side:?} has won ({reason:?})."),
+                Draw(reason) => format!("Draw ({reason:?})."),
             };
-            if self.log_lines.last().is_some_and(|m| m != over_msg.as_str()) {
+            if self
+                .log_lines
+                .last()
+                .is_some_and(|m| m != over_msg.as_str())
+            {
                 self.log_lines.push(over_msg);
             }
         }
     }
-    
+
     pub(crate) fn update(&mut self, ctx: &egui::Context) -> Option<GamePlayAction> {
         let mut action: Option<GamePlayAction> = None;
         let total_space = ctx.screen_rect();
@@ -125,45 +127,46 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
         // is smaller (as it has to be a square)
         let central_panel_side = min(
             (total_space.max.y - bottom_panel_height) as u32,
-            total_space.max.x as u32
+            total_space.max.x as u32,
         ) as f32;
 
-        egui::TopBottomPanel::bottom("log_pane").exact_height(bottom_panel_height).show(ctx, |ui| {
-            ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
-                ui.horizontal(|ui| {
-                    if ui.button("Quit game").clicked() {
-                        action = Some(GamePlayAction::QuitGame)
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    if ui.button("Quit app").clicked() {
-                        action = Some(GamePlayAction::QuitApp)
-                    }
-                    let undo_button = ui.button("Undo move");
-                    if undo_button.clicked() {
-                        action = Some(GamePlayAction::UndoPlay);
-                    }
-                });
-                ui.vertical(|ui| {
-                    egui::ScrollArea::vertical().auto_shrink([false, true])
-                        //.max_height(bottom_panel_height)
-                        .show(ui, |ui| {
-                            ui.label(self.log_lines.join("\n").as_str());
-                            ui.scroll_to_cursor(Some(Align::BOTTOM))
-                        });
+        egui::TopBottomPanel::bottom("log_pane")
+            .exact_height(bottom_panel_height)
+            .show(ctx, |ui| {
+                ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.button("Quit game").clicked() {
+                            action = Some(GamePlayAction::QuitGame)
+                        }
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if ui.button("Quit app").clicked() {
+                            action = Some(GamePlayAction::QuitApp)
+                        }
+                        let undo_button = ui.button("Undo move");
+                        if undo_button.clicked() {
+                            action = Some(GamePlayAction::UndoPlay);
+                        }
+                    });
+                    ui.vertical(|ui| {
+                        egui::ScrollArea::vertical()
+                            .auto_shrink([false, true])
+                            //.max_height(bottom_panel_height)
+                            .show(ui, |ui| {
+                                ui.label(self.log_lines.join("\n").as_str());
+                                ui.scroll_to_cursor(Some(Align::BOTTOM))
+                            });
+                    })
                 })
-
-            })
-        });
+            });
         egui::CentralPanel::default().show(&ctx, |ui| {
             self.handle_play(ctx, ui, central_panel_side);
         });
         if let Some(GamePlayAction::UndoPlay) = action {
             self.game.undo_last_play();
-            self.ai_sender.send(Message::Request(self.game.state))
+            self.ai_sender
+                .send(Message::Request(self.game.state))
                 .expect("Failed to send request");
-
         }
         action
     }
-
 }
