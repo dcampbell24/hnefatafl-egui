@@ -29,7 +29,7 @@ pub(crate) struct SearchStats {
     max_depth: u8,
 }
 
-pub(crate) enum AiError {
+pub enum AiError {
     NoPlayAvailable,
     NotMyTurn,
 }
