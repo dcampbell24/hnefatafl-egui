@@ -1,6 +1,6 @@
 pub mod ai;
 mod app;
-pub mod board;
+mod board;
 mod game_play_view;
 mod game_setup_view;
 

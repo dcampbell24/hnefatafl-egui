@@ -66,7 +66,7 @@ impl TileState {
     }
 }
 
-pub struct Board {
+pub(crate) struct Board {
     /// The state of each tile.
     tile_state: HashMap<Tile, TileState>,
     /// Tiles that have been selected by the user.
