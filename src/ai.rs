@@ -322,7 +322,7 @@ impl BasicAi {
                 .board_geo
                 .neighbors(to)
                 .iter()
-                .filter(|pos| board.get_piece(**pos).map_or(false, |p| p.side == Attacker))
+                .filter(|pos| board.get_piece(**pos).is_some_and(|p| p.side == Attacker))
                 .count();
             score -= (hostile_neighbors as i32) * 400;
         }

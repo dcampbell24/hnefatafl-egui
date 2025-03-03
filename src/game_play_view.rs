@@ -158,7 +158,7 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
                     })
                 })
             });
-        egui::CentralPanel::default().show(&ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |ui| {
             self.handle_play(ctx, ui, central_panel_side);
         });
         if let Some(GamePlayAction::UndoPlay) = action {

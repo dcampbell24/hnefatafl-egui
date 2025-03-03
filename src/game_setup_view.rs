@@ -52,7 +52,7 @@ impl GameSetupView {
                 egui::ComboBox::from_id_salt("variant")
                     .selected_text(&self.selected_variant)
                     .show_ui(ui, |combo_box| {
-                        for (k, _) in &self.variants {
+                        for k in self.variants.keys() {
                             combo_box.selectable_value(
                                 &mut self.selected_variant,
                                 k.clone(),
@@ -65,7 +65,7 @@ impl GameSetupView {
                 egui::ComboBox::from_id_salt("ai_side")
                     .selected_text(&self.selected_ai_side)
                     .show_ui(ui, |combo_box| {
-                        for (k, _) in &self.ai_sides {
+                        for k in self.ai_sides.keys() {
                             combo_box.selectable_value(
                                 &mut self.selected_ai_side,
                                 k.clone(),

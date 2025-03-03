@@ -131,7 +131,7 @@ impl Board {
         let tile_size_px = Vec2::new(tile_len_px, tile_len_px);
         let mut responses: Vec<(Response, Rect, Color32, Tile)> = vec![];
         for (tile, state) in &self.tile_state {
-            let color = if self.possible_dests.contains(&tile) {
+            let color = if self.possible_dests.contains(tile) {
                 TILE_COLORS.possible_dest
             } else if state.is_throne {
                 TILE_COLORS.throne
@@ -141,7 +141,7 @@ impl Board {
                 TILE_COLORS.base_camp
             } else if self.selected_tiles.0 == Some(*tile) {
                 TILE_COLORS.selected
-            } else if self.possible_dests.contains(&tile) {
+            } else if self.possible_dests.contains(tile) {
                 TILE_COLORS.possible_dest
             } else {
                 TILE_COLORS.plain
@@ -206,12 +206,10 @@ impl Board {
                         } else {
                             FIGURES.up_arrow
                         }
+                    } else if play_record.play.movement.displacement > 0 {
+                        FIGURES.right_arrow
                     } else {
-                        if play_record.play.movement.displacement > 0 {
-                            FIGURES.right_arrow
-                        } else {
-                            FIGURES.left_arrow
-                        }
+                        FIGURES.left_arrow
                     })
                 } else {
                     None
