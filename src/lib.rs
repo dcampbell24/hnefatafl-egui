@@ -1,7 +1,11 @@
 pub mod ai;
+#[cfg(target_arch = "wasm32")]
 mod app;
+#[cfg(target_arch = "wasm32")]
 mod board;
+#[cfg(target_arch = "wasm32")]
 mod game_play_view;
+#[cfg(target_arch = "wasm32")]
 mod game_setup_view;
 
 #[cfg(target_arch = "wasm32")]
