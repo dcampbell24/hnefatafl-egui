@@ -38,9 +38,9 @@ struct Figures {
 }
 
 const FIGURES: Figures = Figures {
-    king: '♚',
-    white_soldier: '♟',
-    black_soldier: '♙',
+    king: '♔',
+    white_soldier: '♙',
+    black_soldier: '♟',
     up_arrow: '⬆',
     down_arrow: '⬇',
     left_arrow: '⬅',
