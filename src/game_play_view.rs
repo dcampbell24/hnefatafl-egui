@@ -8,7 +8,7 @@ use hnefatafl::game::Game;
 use hnefatafl::game::GameOutcome::{Draw, Win};
 use hnefatafl::game::GameStatus::Over;
 use hnefatafl::pieces;
-use hnefatafl::play::Play;
+use hnefatafl::play::ValidPlay;
 use hnefatafl::rules::Ruleset;
 use std::cmp::min;
 use std::time::Duration;
@@ -19,7 +19,7 @@ use wasm_thread as thread;
 
 enum Message<T: BoardState> {
     Request(GameState<T>),
-    Response(Play, GameState<T>, Vec<String>)
+    Response(ValidPlay, GameState<T>, Vec<String>)
 }
 
 pub(crate) enum GamePlayAction {
@@ -38,14 +38,14 @@ pub(crate) struct GameSetup {
 
 pub(crate) struct GamePlayView<T: BoardState> {
     game: Game<T>,
-    board_ui: Board,
+    board_ui: Board<T>,
     ai_side: pieces::Side,
     ai_sender: std::sync::mpsc::Sender<Message<T>>,
     ai_receiver: std::sync::mpsc::Receiver<Message<T>>,
     log_lines: Vec<String>
 }
 
-impl<T: BoardState + Send + 'static> GamePlayView<T> {
+impl<T: BoardState + Send + 'static> GamePlayView<T> where T::BitField: Send  {
     pub(crate) fn new(setup: GameSetup) -> Self {
         let game: Game<T> = Game::new(setup.ruleset, &setup.starting_board).unwrap();
         let board = Board::new(&game, setup.ai_side.other());
@@ -93,7 +93,10 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> {
         if let Ok(Message::Response(ai_play, state, mut lines)) = self.ai_receiver.try_recv() {
             self.log_lines.append(&mut lines);
             if state == self.game.state {
-                self.game.do_play(ai_play).unwrap();
+                let play_res = self.game.logic.do_valid_play(ai_play, state);
+                self.game.state_history.push(play_res.new_state);
+                self.game.state = play_res.new_state;
+                self.game.play_history.push(play_res.record);
                 self.log_lines.push(format!("{:?} played {}", self.ai_side, ai_play));
             }
         }

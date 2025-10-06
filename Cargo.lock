@@ -1495,9 +1495,8 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hnefatafl"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94573b3aef63d664d30fb6d8308145083462684569b6a6d3540e8a81c7e668e8"
+version = "0.0.2"
+source = "git+https://github.com/bunburya/hnefatafl-rs?rev=3ff57d25cae72313ce19d86d6dfb6a78c2d442a2#3ff57d25cae72313ce19d86d6dfb6a78c2d442a2"
 dependencies = [
  "primitive-types",
 ]

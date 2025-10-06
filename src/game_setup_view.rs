@@ -95,6 +95,7 @@ impl Default for GameSetupView {
         variants.insert("Copenhagen".to_string(), (rules::COPENHAGEN, boards::COPENHAGEN.to_string()));
         variants.insert("Brandubh".to_string(), (rules::BRANDUBH, boards::BRANDUBH.to_string()));
         variants.insert("Tablut".to_string(), (rules::TABLUT, boards::TABLUT.to_string()));
+        variants.insert("Magpie".to_string(), (rules::MAGPIE, boards::MAGPIE.to_string()));
 
         let mut sides: HashMap<String, pieces::Side> = HashMap::default();
         sides.insert("Attacker".to_string(), pieces::Side::Attacker);

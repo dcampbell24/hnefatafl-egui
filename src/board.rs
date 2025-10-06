@@ -3,7 +3,7 @@ use egui::{Align2, FontId, Rect, Response, Vec2};
 use hnefatafl::board::state::BoardState;
 use hnefatafl::game::Game;
 use hnefatafl::pieces;
-use hnefatafl::pieces::{Piece, PieceType};
+use hnefatafl::pieces::{Piece, PieceType, PlacedPiece};
 use hnefatafl::play::{Play, PlayRecord};
 use hnefatafl::tiles::{Axis, Tile};
 use std::collections::{HashMap, HashSet};
@@ -21,7 +21,7 @@ const TILE_COLORS: TileColors = TileColors {
     throne: Color32::from_gray(180),
     corner: Color32::from_gray(180),
     base_camp: Color32::from_gray(180),
-    plain: Color32::from_gray(240),
+    plain: Color32::from_rgb(255, 255, 240),
     selected: Color32::from_rgb(200, 240, 200),
     possible_dest: Color32::from_rgb(200, 240, 200)
 };
@@ -72,7 +72,7 @@ impl TileState {
 }
 
 
-pub(crate) struct Board {
+pub(crate) struct Board<T: BoardState> {
     /// The state of each tile.
     tile_state: HashMap<Tile, TileState>,
     /// Tiles that have been selected by the user.
@@ -80,22 +80,22 @@ pub(crate) struct Board {
     /// Possible destinations of the currently selected piece.
     possible_dests: HashSet<Tile>,
     /// The last play that was made.
-    last_play: Option<PlayRecord>,
+    last_play: Option<PlayRecord<T>>,
     /// The side that the human is playing as.
     human_side: pieces::Side,
     /// The length of the board in tiles.
     board_len_tiles: u8
 }
 
-impl Board {
+impl<T: BoardState> Board<T> {
 
-    pub(crate) fn new<T: BoardState>(game: &Game<T>, human_side: pieces::Side) -> Self {
+    pub(crate) fn new(game: &Game<T>, human_side: pieces::Side) -> Self {
         let mut tile_state: HashMap<Tile, TileState> = HashMap::new();
         for tile in game.logic.board_geo.iter_tiles() {
             tile_state.insert(tile, TileState::new(
                 game.state.board.get_piece(tile),
                 game.logic.board_geo.special_tiles.throne == tile,
-                game.logic.board_geo.special_tiles.corners.contains(&tile),
+                game.logic.board_geo.special_tiles.corners.contains(tile),
                 false
             ));
         }
@@ -108,7 +108,7 @@ impl Board {
             board_len_tiles: game.logic.board_geo.side_len
         }
     }
-    fn update_tile_state<T: BoardState>(&mut self, board_state: T) {
+    fn update_tile_state(&mut self, board_state: T) {
         for (tile, state) in self.tile_state.iter_mut() {
             state.piece = board_state.get_piece(*tile);
         }
@@ -118,7 +118,7 @@ impl Board {
         (board_side_px - self.board_len_tiles as f32) / (self.board_len_tiles as f32)
     }
 
-    pub(crate) fn update<T: BoardState>(
+    pub(crate) fn update(
         &mut self,
         game: &Game<T>,
         ctx: &egui::Context, ui:
@@ -168,7 +168,7 @@ impl Board {
                     // We have clicked on a tile containing our own piece and it is our turn
                     self.selected_tiles.0 = Some(tile);
                     if let Ok(iter) = game.iter_plays(tile) {
-                        self.possible_dests = iter.map(|p| p.to()).collect();
+                        self.possible_dests = iter.map(|p| p.play.to()).collect();
                     };
                 } else if Some(tile) == self.selected_tiles.0 {
                     // User has clicked a tile again, unselecting it.
@@ -189,7 +189,7 @@ impl Board {
                     _ => panic!("Unexpected piece type")
                 })
             } else if let Some(play_record) = &self.last_play {
-                if play_record.effects.captures.iter().any(|p| p.tile == tile) {
+                if play_record.effects.captures.into_iter().any(|p: PlacedPiece| p.tile == tile) {
                     Some(FIGURES.captured_tile)
                 } else if play_record.play.from == tile {
                     Some(if play_record.play.movement.axis == Axis::Vertical {
