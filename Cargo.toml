@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-hnefatafl = { git = "https://github.com/bunburya/hnefatafl-rs", rev = "3ff57d25cae72313ce19d86d6dfb6a78c2d442a2" }
+hnefatafl = { git = "https://github.com/bunburya/hnefatafl-rs.git", rev = "76253a6e96be49f4eb87bfca27710b2fde7675e5" }
 rand = {  version = "0.8.5", features = ["small_rng"] }
 egui = "0.30.0"
 eframe = "0.30.0"

@@ -1496,7 +1496,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 [[package]]
 name = "hnefatafl"
 version = "0.0.2"
-source = "git+https://github.com/bunburya/hnefatafl-rs?rev=3ff57d25cae72313ce19d86d6dfb6a78c2d442a2#3ff57d25cae72313ce19d86d6dfb6a78c2d442a2"
+source = "git+https://github.com/bunburya/hnefatafl-rs.git?rev=76253a6e96be49f4eb87bfca27710b2fde7675e5#76253a6e96be49f4eb87bfca27710b2fde7675e5"
 dependencies = [
  "primitive-types",
 ]
