@@ -208,7 +208,7 @@ pub struct BasicAi<T: BoardState> {
 }
 
 impl<T: BoardState> BasicAi<T> {
-    pub(crate) fn new(logic: GameLogic<T>, side: Side, time_to_play: Duration) -> Self {
+    pub fn new(logic: GameLogic<T>, side: Side, time_to_play: Duration) -> Self {
         let mut rng = thread_rng();
         Self {
             side,

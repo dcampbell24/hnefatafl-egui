@@ -17,7 +17,7 @@ pub(crate) struct MyApp {
 }
 
 impl MyApp {
-    pub(crate) fn new(cc: &CreationContext) -> Self {
+    pub(crate) fn new(_cc: &CreationContext) -> Self {
         Self {
             current_view: View::GameSetup(GameSetupView::default()),
         }
@@ -50,7 +50,7 @@ impl MyApp {
 }
 
 impl App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut Frame) {
         let new_view = match self.current_view {
             View::GameSetup(ref mut game_setup_view) => {
                 // Game setup screen
