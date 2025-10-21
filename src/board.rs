@@ -66,7 +66,6 @@ impl TileState {
     }
 }
 
-
 pub(crate) struct Board<T: BoardState> {
     /// The state of each tile.
     tile_state: HashMap<Tile, TileState>,
@@ -83,16 +82,18 @@ pub(crate) struct Board<T: BoardState> {
 }
 
 impl<T: BoardState> Board<T> {
-
     pub(crate) fn new(game: &Game<T>, human_side: pieces::Side) -> Self {
         let mut tile_state: HashMap<Tile, TileState> = HashMap::new();
         for tile in game.logic.board_geo.iter_tiles() {
-            tile_state.insert(tile, TileState::new(
-                game.state.board.get_piece(tile),
-                game.logic.board_geo.special_tiles.throne == tile,
-                game.logic.board_geo.special_tiles.corners.contains(tile),
-                false
-            ));
+            tile_state.insert(
+                tile,
+                TileState::new(
+                    game.state.board.get_piece(tile),
+                    game.logic.board_geo.special_tiles.throne == tile,
+                    game.logic.board_geo.special_tiles.corners.contains(tile),
+                    false,
+                ),
+            );
         }
         Self {
             tile_state,
@@ -196,7 +197,12 @@ impl<T: BoardState> Board<T> {
                     _ => panic!("Unexpected piece type"),
                 })
             } else if let Some(play_record) = &self.last_play {
-                if play_record.effects.captures.into_iter().any(|p: PlacedPiece| p.tile == tile) {
+                if play_record
+                    .effects
+                    .captures
+                    .into_iter()
+                    .any(|p: PlacedPiece| p.tile == tile)
+                {
                     Some(FIGURES.captured_tile)
                 } else if play_record.play.from == tile {
                     Some(if play_record.play.movement.axis == Axis::Vertical {

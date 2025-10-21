@@ -19,7 +19,7 @@ use wasm_thread as thread;
 
 enum Message<T: BoardState> {
     Request(GameState<T>),
-    Response(ValidPlay, GameState<T>, Vec<String>)
+    Response(ValidPlay, GameState<T>, Vec<String>),
 }
 
 pub(crate) enum GamePlayAction {
@@ -45,7 +45,10 @@ pub(crate) struct GamePlayView<T: BoardState> {
     log_lines: Vec<String>,
 }
 
-impl<T: BoardState + Send + 'static> GamePlayView<T> where T::BitField: Send  {
+impl<T: BoardState + Send + 'static> GamePlayView<T>
+where
+    T::BitField: Send,
+{
     pub(crate) fn new(setup: GameSetup) -> Self {
         let game: Game<T> = Game::new(setup.ruleset, &setup.starting_board).unwrap();
         let board = Board::new(&game, setup.ai_side.other());
@@ -94,7 +97,8 @@ impl<T: BoardState + Send + 'static> GamePlayView<T> where T::BitField: Send  {
                 self.game.state_history.push(play_res.new_state);
                 self.game.state = play_res.new_state;
                 self.game.play_history.push(play_res.record);
-                self.log_lines.push(format!("{:?} played {}", self.ai_side, ai_play));
+                self.log_lines
+                    .push(format!("{:?} played {}", self.ai_side, ai_play));
             }
         }
         if let Some(human_play) = self.board_ui.update(&self.game, ctx, ui, board_side_px) {

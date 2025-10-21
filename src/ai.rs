@@ -100,7 +100,7 @@ struct TTEntry {
     score: i32,
     node_type: NodeType,
     best_play: Option<ValidPlay>,
-    age: u8
+    age: u8,
 }
 
 impl TTEntry {
@@ -110,7 +110,7 @@ impl TTEntry {
         score: i32,
         node_type: NodeType,
         best_play: Option<ValidPlay>,
-        age: u8
+        age: u8,
     ) -> Self {
         Self {
             hash,
@@ -155,7 +155,7 @@ impl TranspositionTable {
         score: i32,
         node_type: NodeType,
         best_play: Option<ValidPlay>,
-        stats: &mut SearchStats
+        stats: &mut SearchStats,
     ) {
         let index = self.get_index(hash);
         let entry = TTEntry::new(hash, depth, score, node_type, best_play, self.current_age);
@@ -193,7 +193,10 @@ impl TranspositionTable {
 
 pub trait Ai {
     type BoardState: BoardState;
-    fn next_play(&mut self, game_state: &GameState<Self::BoardState>) -> Result<(ValidPlay, Vec<String>), AiError>;
+    fn next_play(
+        &mut self,
+        game_state: &GameState<Self::BoardState>,
+    ) -> Result<(ValidPlay, Vec<String>), AiError>;
 }
 
 pub struct BasicAi<T: BoardState> {
@@ -205,7 +208,6 @@ pub struct BasicAi<T: BoardState> {
 }
 
 impl<T: BoardState> BasicAi<T> {
-    
     pub(crate) fn new(logic: GameLogic<T>, side: Side, time_to_play: Duration) -> Self {
         let mut rng = thread_rng();
         Self {
@@ -226,7 +228,9 @@ impl<T: BoardState> BasicAi<T> {
     fn eval_board(&self, board: &T) -> i32 {
         // unwrap should be safe here because we have already checked for win conditions (including
         // capture of king) in `eval_state`
-        let king_tile = board.get_king().expect("There should be a king on the board.");
+        let king_tile = board
+            .get_king()
+            .expect("There should be a king on the board.");
         let king_coords = Coords::from(king_tile);
 
         let mut score = 0i32;
@@ -264,7 +268,8 @@ impl<T: BoardState> BasicAi<T> {
         let mut total_dist = 0u32;
         let mut attacker_count = 0u32;
         for tile in board.occupied_by_side(Attacker) {
-            total_dist += Coords::from(tile).row_col_offset_from(king_coords)
+            total_dist += Coords::from(tile)
+                .row_col_offset_from(king_coords)
                 .manhattan_dist() as u32;
             attacker_count += 1;
         }
@@ -306,8 +311,13 @@ impl<T: BoardState> BasicAi<T> {
         let moving_piece = board.get_piece(vp.play.from).expect("No piece to move.");
 
         // Prioritise capture plays
-        score += (self.logic.get_captures(vp, moving_piece, state).occupied().count() as i32) * 1000;
-        
+        score += (self
+            .logic
+            .get_captures(vp, moving_piece, state)
+            .occupied()
+            .count() as i32)
+            * 1000;
+
         // King-specific plays
         if moving_piece == KING {
             // Bonus for king moves towards edges (escape routes)
@@ -340,9 +350,15 @@ impl<T: BoardState> BasicAi<T> {
 
         score
     }
-    
-    fn order_plays(&self, valid_plays: Vec<ValidPlay>, state: &GameState<T>, tt_play: Option<ValidPlay>) -> Vec<ValidPlay> {
-        let mut scored_plays: Vec<(ValidPlay, i32)> = valid_plays.into_iter()
+
+    fn order_plays(
+        &self,
+        valid_plays: Vec<ValidPlay>,
+        state: &GameState<T>,
+        tt_play: Option<ValidPlay>,
+    ) -> Vec<ValidPlay> {
+        let mut scored_plays: Vec<(ValidPlay, i32)> = valid_plays
+            .into_iter()
             .map(|p| (p, self.eval_play(p, state)))
             .collect();
 
@@ -366,7 +382,7 @@ impl<T: BoardState> BasicAi<T> {
         maximize: bool,
         mut alpha: i32,
         mut beta: i32,
-        stats: &mut SearchStats
+        stats: &mut SearchStats,
     ) -> (i32, Option<ValidPlay>) {
         stats.states += 1;
         let state = self.logic.do_valid_play(vp, starting_state).new_state;
@@ -398,11 +414,15 @@ impl<T: BoardState> BasicAi<T> {
         let mut node_type = NodeType::Exact;
         let mut best_score = if maximize { i32::MIN } else { i32::MAX };
         let mut best_play: Option<ValidPlay> = None;
-        
+
         // Collect and sort moves
         let mut plays = Vec::new();
         for t in state.board.occupied_by_side(state.side_to_play) {
-            for p in self.logic.iter_plays(t, &state).expect("Could not iterate plays") {
+            for p in self
+                .logic
+                .iter_plays(t, &state)
+                .expect("Could not iterate plays")
+            {
                 plays.push(p);
             }
         }
@@ -456,12 +476,15 @@ impl<T: BoardState> BasicAi<T> {
         state: GameState<T>,
         maximize: bool,
         stats: &mut SearchStats,
-        cutoff_time: Instant
+        cutoff_time: Instant,
     ) -> (Option<ValidPlay>, i32, bool) {
-        
         let mut plays: Vec<(ValidPlay, GameState<T>)> = Vec::new();
         for t in state.board.occupied_by_side(state.side_to_play) {
-            for p in self.logic.iter_plays(t, &state).expect("Could not iterate plays") {
+            for p in self
+                .logic
+                .iter_plays(t, &state)
+                .expect("Could not iterate plays")
+            {
                 let next_state = self.logic.do_valid_play(p, state).new_state;
                 plays.push((p, next_state));
             }
@@ -469,7 +492,7 @@ impl<T: BoardState> BasicAi<T> {
 
         let mut best_score = if maximize { i32::MIN } else { i32::MAX };
         let mut best_play: Option<ValidPlay> = None;
-        
+
         for (vp, _) in plays {
             if Instant::now() > cutoff_time {
                 return (best_play, best_score, true);
@@ -493,7 +516,7 @@ impl<T: BoardState> BasicAi<T> {
         &mut self,
         state: GameState<T>,
         maximize: bool,
-        stats: &mut SearchStats
+        stats: &mut SearchStats,
     ) -> (Option<ValidPlay>, i32) {
         self.tt.new_search();
         let mut depth = 1;
@@ -534,7 +557,10 @@ impl<T: BoardState> BasicAi<T> {
 impl<T: BoardState> Ai for BasicAi<T> {
     type BoardState = T;
 
-    fn next_play(&mut self, game_state: &GameState<T>) -> Result<(ValidPlay, Vec<String>), AiError> {
+    fn next_play(
+        &mut self,
+        game_state: &GameState<T>,
+    ) -> Result<(ValidPlay, Vec<String>), AiError> {
         if game_state.side_to_play != self.side {
             return Err(NotMyTurn);
         }

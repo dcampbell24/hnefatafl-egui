@@ -1,10 +1,10 @@
 use crate::game_play_view::{GamePlayAction, GamePlayView};
 use crate::game_setup_view::{GameSetupAction, GameSetupView};
 use eframe::{App, CreationContext, Frame};
-use std::process::exit;
 use egui::RichText;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use hnefatafl::aliases::LargeBasicBoardState;
+use std::process::exit;
 
 enum View {
     GameSetup(GameSetupView),
