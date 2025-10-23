@@ -9,10 +9,11 @@ use hnefatafl::pieces;
 use hnefatafl::pieces::PieceType::{King, Soldier};
 use hnefatafl::pieces::Side::{Attacker, Defender};
 use hnefatafl::pieces::{Piece, Side, KING};
-use hnefatafl::play::ValidPlay;
+use hnefatafl::play::{Play, ValidPlay};
 use hnefatafl::tiles::Coords;
 use rand::{thread_rng, Rng};
 use std::cmp::min;
+use std::collections::HashSet;
 use std::time::Duration;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -206,6 +207,7 @@ pub struct BasicAi<T: BoardState> {
     zt: ZobristTable,
     tt: TranspositionTable,
     time_to_play: Duration,
+    previous_plays: HashSet<Play>,
 }
 
 impl<T: BoardState> BasicAi<T> {
@@ -221,6 +223,7 @@ impl<T: BoardState> BasicAi<T> {
             #[cfg(not(target_arch = "wasm32"))]
             tt: TranspositionTable::new(512),
             time_to_play,
+            previous_plays: HashSet::new(),
         }
     }
 
@@ -494,19 +497,32 @@ impl<T: BoardState> BasicAi<T> {
         let mut best_score = if maximize { i32::MIN } else { i32::MAX };
         let mut best_play: Option<ValidPlay> = None;
 
-        for (vp, _) in plays {
+        for (valid_play, _) in plays {
             if Instant::now() > cutoff_time {
                 return (best_play, best_score, true);
             }
             // Not really sure why we need to negate maximize here but the algo definitely
             // performs better when we do...
-            let (score, _) = self.minimax(vp, state, depth, !maximize, i32::MIN, i32::MAX, stats);
-            if maximize && (score > best_score) {
-                best_score = score;
-                best_play = Some(vp);
-            } else if (!maximize) && (score < best_score) {
-                best_score = score;
-                best_play = Some(vp);
+            let (score, _) = self.minimax(
+                valid_play,
+                state,
+                depth,
+                !maximize,
+                i32::MIN,
+                i32::MAX,
+                stats,
+            );
+
+            let play = valid_play.play;
+            // FIXME(dcampbell24): should only have to do this for the defender.
+            if !self.previous_plays.contains(&play) {
+                if maximize && (score > best_score) {
+                    best_score = score;
+                    best_play = Some(valid_play);
+                } else if (!maximize) && (score < best_score) {
+                    best_score = score;
+                    best_play = Some(valid_play);
+                }
             }
         }
 
@@ -532,16 +548,15 @@ impl<T: BoardState> BasicAi<T> {
                 stats,
                 start_time + self.time_to_play,
             );
-            if let Some(p) = play {
+
+            if let Some(valid_play) = play {
                 if !out_of_time {
-                    println!(
-                        "Best play after search depth {}: {} (score: {})",
-                        depth, p, score
-                    );
+                    println!("Best play after search depth {depth}: {valid_play} (score: {score})");
                     best_play = play;
                     best_score = score;
                 }
             }
+
             if out_of_time || play.is_none() {
                 if out_of_time {
                     stats.max_depth = depth - 1;
@@ -584,9 +599,11 @@ impl<T: BoardState> Ai for BasicAi<T> {
             ),
         ];
 
-        if let Some(p) = best_play {
-            println!("Best play: {p}, score: {best_score}");
-            Ok((p, log_lines))
+        if let Some(valid_play) = best_play {
+            let play = valid_play.play;
+            self.previous_plays.insert(play);
+            println!("Best play: {valid_play}, score: {best_score}");
+            Ok((valid_play, log_lines))
         } else {
             println!("No play found");
             Err(NoPlayAvailable)
