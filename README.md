@@ -27,7 +27,7 @@ You will then find the `hnefatafl-egui` executable in the `target/release/` dire
 Because we use are using threads (via the `wasm-thread` crate), we need to use nightly Rust. Build with:
 
 ```shell
-RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals" cargo build --target=wasm32-unknown-unknown --release -Z build-std=panic_abort,std
+cargo +nightly build --target=wasm32-unknown-unknown --release -Z build-std=panic_abort,std
 ```
 
 Install the `wasm-bindgen` command-line interface if you have not done so:
