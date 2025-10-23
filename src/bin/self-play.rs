@@ -26,7 +26,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn handle_messages<T: BoardState>(
     mut game: hnefatafl::game::Game<T>,
     mut ai_attacker: BasicAi<T>,
