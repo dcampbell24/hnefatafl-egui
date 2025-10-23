@@ -2,6 +2,7 @@
 name = "hnefatafl-egui"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 hnefatafl = { git = "https://github.com/bunburya/hnefatafl-rs.git", rev = "76253a6e96be49f4eb87bfca27710b2fde7675e5" }
