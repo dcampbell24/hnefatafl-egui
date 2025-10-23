@@ -30,6 +30,7 @@ pub(crate) struct SearchStats {
     max_depth: u8,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub enum AiError {
     NoPlayAvailable,
     NotMyTurn,
